@@ -97,6 +97,11 @@ export default function MessagePanel({ open, onClose }: MessagePanelProps) {
                     <p className="text-sm text-foreground leading-relaxed break-words">
                       {msg.text}
                     </p>
+                    <div className="flex items-center justify-end mt-1">
+                      <span className="text-red-500 text-xs font-bold">
+                        ✓✓ Delivered
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}

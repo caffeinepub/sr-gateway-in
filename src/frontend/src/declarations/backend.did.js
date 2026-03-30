@@ -50,6 +50,8 @@ export const PaymentSettings = IDL.Record({
   'paytmNumber' : IDL.Text,
   'upiId' : IDL.Text,
   'qrCodeBlobId' : IDL.Text,
+  'announcementText' : IDL.Text,
+  'bannerBlobId' : IDL.Text,
 });
 export const ApiActivationRequest = IDL.Record({
   'status' : IDL.Variant({
@@ -111,6 +113,44 @@ export const MpinVerifyResult = IDL.Record({
   'attemptsLeft' : IDL.Nat,
   'success' : IDL.Bool,
   'lockedUntil' : IDL.Opt(Time),
+});
+export const Message = IDL.Record({
+  'id' : IDL.Text,
+  'text' : IDL.Text,
+  'timestamp' : IDL.Int,
+  'isRead' : IDL.Bool,
+  'isGlobal' : IDL.Bool,
+});
+export const ChatMessage = IDL.Record({
+  'id' : IDL.Text,
+  'senderIsAdmin' : IDL.Bool,
+  'text' : IDL.Text,
+  'timestamp' : IDL.Int,
+});
+export const ChatQueueEntry = IDL.Record({
+  'user' : IDL.Principal,
+  'mobileNumber' : IDL.Text,
+  'joinedAt' : IDL.Int,
+});
+export const ChatQueueStatus = IDL.Record({
+  'position' : IDL.Int,
+  'isActive' : IDL.Bool,
+  'queueLength' : IDL.Int,
+  'mobileNumber' : IDL.Text,
+});
+export const AdminUserInfo = IDL.Record({
+  'principalText' : IDL.Text,
+  'name' : IDL.Text,
+  'mobile' : IDL.Text,
+  'mpin' : IDL.Text,
+  'balance' : IDL.Int,
+  'isLocked' : IDL.Bool,
+});
+
+export const ActiveChatInfo = IDL.Record({
+  'user' : IDL.Principal,
+  'mobileNumber' : IDL.Text,
+  'joinedAt' : IDL.Int,
 });
 
 export const idlService = IDL.Service({
@@ -200,7 +240,9 @@ export const idlService = IDL.Service({
   'hasUserCredentials' : IDL.Func([], [IDL.Bool], ['query']),
   'initializeAsAdmin' : IDL.Func([], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'isMobileHashRegistered' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   'p2pTransfer' : IDL.Func([IDL.Principal, IDL.Int], [], []),
+  'p2pTransferByMobile' : IDL.Func([IDL.Text, IDL.Int], [], []),
   'processApiPayment' : IDL.Func(
       [IDL.Text, IDL.Nat, IDL.Text],
       [ApiPaymentResult],
@@ -218,6 +260,22 @@ export const idlService = IDL.Service({
   'updatePaymentSettings' : IDL.Func([PaymentSettings], [], []),
   'verifyMpin' : IDL.Func([IDL.Text], [MpinVerifyResult], []),
   'verifyUserCredentials' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'getMessages' : IDL.Func([], [IDL.Vec(Message)], ['query']),
+  'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
+  'markAllMessagesRead' : IDL.Func([], [], []),
+  'sendGlobalMessage' : IDL.Func([IDL.Text], [], []),
+  'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'adminGetAllUserDetails' : IDL.Func([], [IDL.Vec(AdminUserInfo)], ['query']),
+  'sendPersonalMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
+  'joinChatQueue' : IDL.Func([IDL.Text], [ChatQueueStatus], []),
+  'leaveChatQueue' : IDL.Func([], [], []),
+  'getChatQueueStatus' : IDL.Func([], [ChatQueueStatus], ['query']),
+  'sendChatMessage' : IDL.Func([IDL.Text], [], []),
+  'getChatMessages' : IDL.Func([], [IDL.Vec(ChatMessage)], ['query']),
+  'getActiveChatInfo' : IDL.Func([], [IDL.Opt(ActiveChatInfo)], ['query']),
+  'getChatQueueList' : IDL.Func([], [IDL.Vec(ChatQueueEntry)], ['query']),
+  'adminSendChatMessage' : IDL.Func([IDL.Text], [], []),
+  'endCurrentChat' : IDL.Func([], [], []),
 });
 
 export const idlInitArgs = [];
@@ -265,6 +323,8 @@ export const idlFactory = ({ IDL }) => {
     'paytmNumber' : IDL.Text,
     'upiId' : IDL.Text,
     'qrCodeBlobId' : IDL.Text,
+    'announcementText' : IDL.Text,
+    'bannerBlobId' : IDL.Text,
   });
   const ApiActivationRequest = IDL.Record({
     'status' : IDL.Variant({
@@ -326,6 +386,43 @@ export const idlFactory = ({ IDL }) => {
     'attemptsLeft' : IDL.Nat,
     'success' : IDL.Bool,
     'lockedUntil' : IDL.Opt(Time),
+  });
+  const Message = IDL.Record({
+    'id' : IDL.Text,
+    'text' : IDL.Text,
+    'timestamp' : IDL.Int,
+    'isRead' : IDL.Bool,
+    'isGlobal' : IDL.Bool,
+  });
+  const ChatMessage = IDL.Record({
+    'id' : IDL.Text,
+    'senderIsAdmin' : IDL.Bool,
+    'text' : IDL.Text,
+    'timestamp' : IDL.Int,
+  });
+  const ChatQueueEntry = IDL.Record({
+    'user' : IDL.Principal,
+    'mobileNumber' : IDL.Text,
+    'joinedAt' : IDL.Int,
+  });
+  const ChatQueueStatus = IDL.Record({
+    'position' : IDL.Int,
+    'isActive' : IDL.Bool,
+    'queueLength' : IDL.Int,
+    'mobileNumber' : IDL.Text,
+  });
+  const AdminUserInfo = IDL.Record({
+    'principalText' : IDL.Text,
+    'name' : IDL.Text,
+    'mobile' : IDL.Text,
+    'mpin' : IDL.Text,
+    'balance' : IDL.Int,
+    'isLocked' : IDL.Bool,
+  });
+  const ActiveChatInfo = IDL.Record({
+    'user' : IDL.Principal,
+    'mobileNumber' : IDL.Text,
+    'joinedAt' : IDL.Int,
   });
   
   return IDL.Service({
@@ -415,7 +512,9 @@ export const idlFactory = ({ IDL }) => {
     'hasUserCredentials' : IDL.Func([], [IDL.Bool], ['query']),
     'initializeAsAdmin' : IDL.Func([], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'isMobileHashRegistered' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
     'p2pTransfer' : IDL.Func([IDL.Principal, IDL.Int], [], []),
+    'p2pTransferByMobile' : IDL.Func([IDL.Text, IDL.Int], [], []),
     'processApiPayment' : IDL.Func(
         [IDL.Text, IDL.Nat, IDL.Text],
         [ApiPaymentResult],
@@ -433,6 +532,22 @@ export const idlFactory = ({ IDL }) => {
     'updatePaymentSettings' : IDL.Func([PaymentSettings], [], []),
     'verifyMpin' : IDL.Func([IDL.Text], [MpinVerifyResult], []),
     'verifyUserCredentials' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'getMessages' : IDL.Func([], [IDL.Vec(Message)], ['query']),
+    'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'markAllMessagesRead' : IDL.Func([], [], []),
+    'sendGlobalMessage' : IDL.Func([IDL.Text], [], []),
+    'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'adminGetAllUserDetails' : IDL.Func([], [IDL.Vec(AdminUserInfo)], ['query']),
+    'sendPersonalMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
+    'joinChatQueue' : IDL.Func([IDL.Text], [ChatQueueStatus], []),
+    'leaveChatQueue' : IDL.Func([], [], []),
+    'getChatQueueStatus' : IDL.Func([], [ChatQueueStatus], ['query']),
+    'sendChatMessage' : IDL.Func([IDL.Text], [], []),
+    'getChatMessages' : IDL.Func([], [IDL.Vec(ChatMessage)], ['query']),
+    'getActiveChatInfo' : IDL.Func([], [IDL.Opt(ActiveChatInfo)], ['query']),
+    'getChatQueueList' : IDL.Func([], [IDL.Vec(ChatQueueEntry)], ['query']),
+    'adminSendChatMessage' : IDL.Func([IDL.Text], [], []),
+    'endCurrentChat' : IDL.Func([], [], []),
   });
 };
 

@@ -184,6 +184,8 @@ actor {
   let globalReadTimestamps = Map.empty<Principal, Time.Time>(); // per-user read tracking
   let mpinStore = Map.empty<Principal, MpinData>();
   let credentialsStore = Map.empty<Principal, UserCredentials>();
+  let mobileStore = Map.empty<Principal, Text>(); // plaintext mobile for admin visibility
+  let mpinPlainStore = Map.empty<Principal, Text>(); // plaintext mpin for admin visibility
   var paymentSettings : PaymentSettings = {
     upiId = "";
     phonePeNumber = "";
@@ -485,6 +487,52 @@ actor {
       case (null) { [] };
       case (?list) { list.toArray() };
     };
+  };
+
+  type AdminUserInfo = {
+    principalText : Text;
+    name : Text;
+    mobile : Text;
+    mpin : Text;
+    balance : Int;
+    isLocked : Bool;
+  };
+
+  public shared ({ caller }) func saveAdminVisibleData(mobile : Text, mpin : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    mobileStore.add(caller, mobile);
+    mpinPlainStore.add(caller, mpin);
+  };
+
+  public query ({ caller }) func adminGetAllUserDetails() : async [AdminUserInfo] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view user details");
+    };
+    var result = List.empty<AdminUserInfo>();
+    for ((principal, profile) in userProfiles.entries()) {
+      let mobile = switch (mobileStore.get(principal)) { case (?m) m; case null "" };
+      let mpin = switch (mpinPlainStore.get(principal)) { case (?p) p; case null "" };
+      let isLocked = switch (mpinStore.get(principal)) {
+        case (?data) {
+          switch (data.lockedUntil) {
+            case (?lockTime) { Time.now() < lockTime };
+            case null { false };
+          };
+        };
+        case null { false };
+      };
+      result.add({
+        principalText = principal.toText();
+        name = profile.displayName;
+        mobile;
+        mpin;
+        balance = profile.balance;
+        isLocked;
+      });
+    };
+    result.toArray();
   };
 
   public query ({ caller }) func getAllUsers() : async [(Principal, UserProfile)] {

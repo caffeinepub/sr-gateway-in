@@ -145,8 +145,13 @@ export default function SetupProfile() {
         setMpin.mutateAsync(pinHash),
       ]);
       toast.success("Account successfully create ho gaya!");
-    } catch {
-      toast.error("Setup failed. Please try again.");
+    } catch (err) {
+      const errMsg = String(err);
+      if (errMsg.includes("DUPLICATE_MOBILE") || errMsg.includes("already")) {
+        toast.error("Yeh mobile number pehle se register hai. Login karein.");
+      } else {
+        toast.error("Setup failed. Please try again.");
+      }
     } finally {
       setSaving(false);
     }

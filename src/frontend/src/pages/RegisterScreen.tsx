@@ -19,6 +19,8 @@ const EMPTY_PIN: string[] = ["", "", "", ""];
 
 export interface RegisterData {
   name: string;
+  mobilePlain: string;
+  mpinPlain: string;
   mobileHash: string;
   passwordHash: string;
   mpinHash: string;
@@ -138,6 +140,8 @@ export default function RegisterScreen({
       localStorage.setItem("sr_user_mobile", mobileClean);
       onRegisterReady?.({
         name: name.trim(),
+        mobilePlain: mobileClean,
+        mpinPlain: p,
         mobileHash,
         passwordHash,
         mpinHash,

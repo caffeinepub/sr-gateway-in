@@ -648,3 +648,36 @@ export function useGetAdminChatMessages() {
     refetchInterval: 3000,
   });
 }
+
+export interface AdminUserInfo {
+  principalText: string;
+  name: string;
+  mobile: string;
+  mpin: string;
+  balance: bigint;
+  isLocked: boolean;
+}
+
+export function useAdminAllUserDetails() {
+  const { actor, isFetching } = useActor();
+  return useQuery<AdminUserInfo[]>({
+    queryKey: ["adminAllUserDetails"],
+    queryFn: async (): Promise<AdminUserInfo[]> => {
+      if (!actor) return [];
+      const result = await (actor as any).adminGetAllUserDetails();
+      return result as AdminUserInfo[];
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 15000,
+  });
+}
+
+export function useSaveAdminVisibleData() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async ({ mobile, mpin }: { mobile: string; mpin: string }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).saveAdminVisibleData(mobile, mpin);
+    },
+  });
+}

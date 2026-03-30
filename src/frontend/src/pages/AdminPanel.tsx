@@ -27,7 +27,9 @@ import type {
 } from "../backend.d";
 import { useBlobStorage } from "../hooks/useBlobStorage";
 import {
+  type AdminUserInfo,
   useAdjustBalance,
+  useAdminAllUserDetails,
   useAdminSendChatMessage,
   useAllUsers,
   useApiConfig,
@@ -467,20 +469,37 @@ function PendingWithdrawals() {
 }
 
 function UsersTab() {
-  const { data: users, isLoading } = useAllUsers();
+  const { data: users, isLoading, refetch } = useAdminAllUserDetails();
   const adjustBalance = useAdjustBalance();
   const [adjustingIdx, setAdjustingIdx] = useState<number | null>(null);
   const [creditAmount, setCreditAmount] = useState("");
+  const [showMpin, setShowMpin] = useState<Record<number, boolean>>({});
 
   if (isLoading) return <LoadingSkeleton />;
   if (!users || users.length === 0)
-    return <EmptyState message="No users yet" />;
+    return (
+      <div className="text-center py-12 space-y-3">
+        <p className="text-muted-foreground">
+          Abhi koi registered user nahi hai.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refetch()}
+          className="rounded-xl"
+        >
+          Refresh
+        </Button>
+      </div>
+    );
 
   const handleCredit = async (
-    principal: Principal,
+    principalText: string,
     currentBalance: bigint,
     _idx: number,
   ) => {
+    const { Principal } = await import("@icp-sdk/core/principal");
+    const principal = Principal.fromText(principalText);
     const amt = Number.parseFloat(creditAmount);
     if (Number.isNaN(amt) || amt <= 0) {
       toast.error("Valid amount daalen");
@@ -502,25 +521,94 @@ function UsersTab() {
 
   return (
     <div className="space-y-3" data-ocid="admin.users.list">
-      {users.map(([principal, user], idx) => (
-        <div
-          key={principal.toString()}
-          data-ocid={`admin.users.item.${idx + 1}`}
-          className="bg-card border border-border rounded-2xl p-4 space-y-2"
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-muted-foreground font-medium">
+          Total Users:{" "}
+          <span className="text-foreground font-bold">{users.length}</span>
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refetch()}
+          className="rounded-xl h-7 text-xs"
         >
+          Refresh
+        </Button>
+      </div>
+      {users.map((user: AdminUserInfo, idx: number) => (
+        <div
+          key={user.principalText}
+          data-ocid={`admin.users.item.${idx + 1}`}
+          className="bg-card border border-border rounded-2xl p-4 space-y-3"
+        >
+          {/* Header: Name + Balance */}
           <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-foreground">
-                {user.displayName || "Unknown"}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                {idx + 1}
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">
+                  {user.name || "Unknown"}
+                </p>
+                {user.isLocked && (
+                  <p className="text-xs text-rose-400 font-medium">
+                    🔒 MPIN Locked
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-bold text-emerald-400">
+                {formatRupees(user.balance)}
               </p>
-              <p className="text-xs text-muted-foreground font-mono truncate max-w-[180px]">
-                {principal.toString().slice(0, 20)}...
+              <p className="text-xs text-muted-foreground">Balance</p>
+            </div>
+          </div>
+
+          {/* Mobile Number */}
+          <div className="bg-muted/40 rounded-xl px-3 py-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Mobile Number</p>
+              <p className="font-mono text-sm text-foreground font-semibold">
+                {user.mobile || (
+                  <span className="text-muted-foreground italic">Not set</span>
+                )}
               </p>
             </div>
-            <p className="font-bold text-foreground">
-              {formatRupees(user.balance)}
-            </p>
+            <span className="text-lg">📱</span>
           </div>
+
+          {/* MPIN */}
+          <div className="bg-muted/40 rounded-xl px-3 py-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">MPIN</p>
+              <p className="font-mono text-sm text-foreground font-semibold tracking-widest">
+                {user.mpin ? (
+                  showMpin[idx] ? (
+                    user.mpin
+                  ) : (
+                    "****"
+                  )
+                ) : (
+                  <span className="text-muted-foreground italic text-xs">
+                    Not set
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setShowMpin((prev) => ({ ...prev, [idx]: !prev[idx] }))
+              }
+              className="text-xs text-primary underline"
+            >
+              {showMpin[idx] ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {/* Credit Amount */}
           {adjustingIdx === idx ? (
             <div className="flex gap-2">
               <Input
@@ -535,7 +623,9 @@ function UsersTab() {
               <Button
                 data-ocid={`admin.users.credit.save_button.${idx + 1}`}
                 size="sm"
-                onClick={() => handleCredit(principal, user.balance, idx)}
+                onClick={() =>
+                  handleCredit(user.principalText, user.balance, idx)
+                }
                 disabled={adjustBalance.isPending}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9"
               >

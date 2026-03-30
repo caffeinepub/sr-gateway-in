@@ -127,6 +127,28 @@ export interface Message {
     isRead: boolean;
     isGlobal: boolean;
 }
+export interface ChatQueueStatus {
+    position: bigint;
+    isActive: boolean;
+    queueLength: bigint;
+    mobileNumber: string;
+}
+export interface ChatMessage {
+    id: string;
+    senderIsAdmin: boolean;
+    text: string;
+    timestamp: bigint;
+}
+export interface ActiveChatInfo {
+    user: Principal;
+    mobileNumber: string;
+    joinedAt: bigint;
+}
+export interface ChatQueueEntry {
+    user: Principal;
+    mobileNumber: string;
+    joinedAt: bigint;
+}
 export interface backendInterface {
     adjustBalance(user: Principal, newBalance: bigint): Promise<void>;
     approveApiActivation(user: Principal, approved: boolean): Promise<void>;
@@ -174,6 +196,13 @@ export interface backendInterface {
     markAllMessagesRead(): Promise<void>;
     sendGlobalMessage(text: string): Promise<void>;
     sendPersonalMessage(user: Principal, text: string): Promise<void>;
+    joinChatQueue(mobileNumber: string): Promise<ChatQueueStatus>;
+    leaveChatQueue(): Promise<void>;
+    getChatQueueStatus(): Promise<ChatQueueStatus>;
+    sendChatMessage(text: string): Promise<void>;
+    getChatMessages(): Promise<Array<ChatMessage>>;
+    getActiveChatInfo(): Promise<ActiveChatInfo | null>;
+    getChatQueueList(): Promise<Array<ChatQueueEntry>>;
+    adminSendChatMessage(text: string): Promise<void>;
+    endCurrentChat(): Promise<void>;
 }
-
-// Message types added for Update 15A

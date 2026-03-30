@@ -56,6 +56,8 @@ export interface PaymentSettings {
   'paytmNumber' : string,
   'upiId' : string,
   'qrCodeBlobId' : string,
+  'announcementText' : string,
+  'bannerBlobId' : string,
 }
 export interface PendingApiActivation {
   'request' : ApiActivationRequest,
@@ -97,6 +99,14 @@ export interface _CaffeineStorageRefillInformation {
 export interface _CaffeineStorageRefillResult {
   'success' : [] | [boolean],
   'topped_up_amount' : [] | [bigint],
+}
+export interface AdminUserInfo {
+  principalText: string;
+  name: string;
+  mobile: string;
+  mpin: string;
+  balance: bigint;
+  isLocked: boolean;
 }
 export interface _SERVICE {
   '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
@@ -149,12 +159,13 @@ export interface _SERVICE {
   'hasUserCredentials' : ActorMethod<[], boolean>,
   'initializeAsAdmin' : ActorMethod<[], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isMobileHashRegistered' : ActorMethod<[string], boolean>,
   'p2pTransfer' : ActorMethod<[Principal, bigint], undefined>,
+  'p2pTransferByMobile' : ActorMethod<[string, bigint], undefined>,
   'processApiPayment' : ActorMethod<[string, bigint, string], ApiPaymentResult>,
   'revokeApiToken' : ActorMethod<[Principal], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setMpin' : ActorMethod<[string], undefined>,
-  'isMobileHashRegistered' : ActorMethod<[string], boolean>,
   'setUserCredentials' : ActorMethod<[string, string], undefined>,
   'submitApiActivationRequest' : ActorMethod<[string, string], undefined>,
   'submitDepositRequest' : ActorMethod<[bigint, string], undefined>,
@@ -164,6 +175,22 @@ export interface _SERVICE {
   'updatePaymentSettings' : ActorMethod<[PaymentSettings], undefined>,
   'verifyMpin' : ActorMethod<[string], MpinVerifyResult>,
   'verifyUserCredentials' : ActorMethod<[string, string], boolean>,
+  'getMessages' : ActorMethod<[], Array<{id: string, text: string, timestamp: bigint, isRead: boolean, isGlobal: boolean}>>,
+  'getUnreadMessageCount' : ActorMethod<[], bigint>,
+  'markAllMessagesRead' : ActorMethod<[], undefined>,
+  'sendGlobalMessage' : ActorMethod<[string], undefined>,
+  'saveAdminVisibleData' : ActorMethod<[string, string], undefined>,
+  'adminGetAllUserDetails' : ActorMethod<[], Array<AdminUserInfo>>,
+  'sendPersonalMessage' : ActorMethod<[Principal, string], undefined>,
+  'joinChatQueue' : ActorMethod<[string], {position: bigint, isActive: boolean, queueLength: bigint, mobileNumber: string}>,
+  'leaveChatQueue' : ActorMethod<[], undefined>,
+  'getChatQueueStatus' : ActorMethod<[], {position: bigint, isActive: boolean, queueLength: bigint, mobileNumber: string}>,
+  'sendChatMessage' : ActorMethod<[string], undefined>,
+  'getChatMessages' : ActorMethod<[], Array<{id: string, senderIsAdmin: boolean, text: string, timestamp: bigint}>>,
+  'getActiveChatInfo' : ActorMethod<[], [] | [{user: Principal, mobileNumber: string, joinedAt: bigint}]>,
+  'getChatQueueList' : ActorMethod<[], Array<{user: Principal, mobileNumber: string, joinedAt: bigint}>>,
+  'adminSendChatMessage' : ActorMethod<[string], undefined>,
+  'endCurrentChat' : ActorMethod<[], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

