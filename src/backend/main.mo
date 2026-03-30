@@ -1048,4 +1048,238 @@ actor {
   };
 
 
+  // ===== LIVE CHAT SUPPORT SYSTEM =====
+
+  type ChatMessage = {
+    id : Text;
+    senderIsAdmin : Bool;
+    text : Text;
+    timestamp : Time.Time;
+  };
+
+  type ChatQueueEntry = {
+    user : Principal;
+    mobileNumber : Text;
+    joinedAt : Time.Time;
+  };
+
+  type ChatQueueStatus = {
+    position : Int; // 0 = not in queue, 1 = active, 2+ = waiting
+    isActive : Bool;
+    queueLength : Int;
+    mobileNumber : Text;
+  };
+
+  type ActiveChatInfo = {
+    user : Principal;
+    mobileNumber : Text;
+    joinedAt : Time.Time;
+  };
+
+  // Chat state
+  var chatQueue = List.empty<ChatQueueEntry>();
+  var chatMessages = List.empty<ChatMessage>();
+  var activeChatUser : ?ChatQueueEntry = null;
+
+  // User joins the chat queue
+  public shared ({ caller }) func joinChatQueue(mobileNumber : Text) : async ChatQueueStatus {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    // Check if already in queue or active
+    switch (activeChatUser) {
+      case (?active) {
+        if (active.user == caller) {
+          return { position = 1; isActive = true; queueLength = chatQueue.size() + 1; mobileNumber = active.mobileNumber };
+        };
+      };
+      case (null) {};
+    };
+    var pos : Int = 0;
+    var found = false;
+    var i : Int = 1;
+    for (entry in chatQueue.values()) {
+      if (entry.user == caller) { pos := i + 1; found := true };
+      i += 1;
+    };
+    if (found) {
+      let total : Int = chatQueue.size() + (switch (activeChatUser) { case (null) { 0 }; case (?_) { 1 } });
+      return { position = pos; isActive = false; queueLength = total; mobileNumber = mobileNumber };
+    };
+    // Add to queue
+    let entry : ChatQueueEntry = { user = caller; mobileNumber; joinedAt = Time.now() };
+    // If no active chat, become active immediately
+    switch (activeChatUser) {
+      case (null) {
+        activeChatUser := ?entry;
+        chatMessages := List.empty<ChatMessage>();
+        return { position = 1; isActive = true; queueLength = 1; mobileNumber };
+      };
+      case (?_) {
+        chatQueue.add(entry);
+        let qLen : Int = chatQueue.size() + 1;
+        return { position = qLen; isActive = false; queueLength = qLen; mobileNumber };
+      };
+    };
+  };
+
+  // User leaves the queue or ends their active chat
+  public shared ({ caller }) func leaveChatQueue() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (activeChatUser) {
+      case (?active) {
+        if (active.user == caller) {
+          // Promote next in queue
+          if (chatQueue.isEmpty()) {
+            activeChatUser := null;
+            chatMessages := List.empty<ChatMessage>();
+          } else {
+            // Pop first element from queue
+            var promoted : ?ChatQueueEntry = null;
+            let rest = List.empty<ChatQueueEntry>();
+            var isFirst = true;
+            for (entry in chatQueue.values()) {
+              if (isFirst) { promoted := ?entry; isFirst := false }
+              else { rest.add(entry) };
+            };
+            chatQueue := rest;
+            activeChatUser := promoted;
+            chatMessages := List.empty<ChatMessage>();
+          };
+          return;
+        };
+      };
+      case (null) {};
+    };
+    // Remove from waiting queue
+    let newQueue = List.empty<ChatQueueEntry>();
+    for (entry in chatQueue.values()) {
+      if (entry.user != caller) { newQueue.add(entry) };
+    };
+    chatQueue := newQueue;
+  };
+
+  // Get current chat queue status for caller
+  public query ({ caller }) func getChatQueueStatus() : async ChatQueueStatus {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let totalLen : Int = chatQueue.size() + (switch (activeChatUser) { case (null) { 0 }; case (?_) { 1 } });
+    switch (activeChatUser) {
+      case (?active) {
+        if (active.user == caller) {
+          return { position = 1; isActive = true; queueLength = totalLen; mobileNumber = active.mobileNumber };
+        };
+      };
+      case (null) {};
+    };
+    var pos : Int = 0;
+    var mobile : Text = "";
+    var i : Int = 2;
+    for (entry in chatQueue.values()) {
+      if (entry.user == caller) { pos := i; mobile := entry.mobileNumber };
+      i += 1;
+    };
+    if (pos > 0) {
+      return { position = pos; isActive = false; queueLength = totalLen; mobileNumber = mobile };
+    };
+    { position = 0; isActive = false; queueLength = totalLen; mobileNumber = "" };
+  };
+
+  // User sends a chat message (only active user can send)
+  public shared ({ caller }) func sendChatMessage(text : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (activeChatUser) {
+      case (?active) {
+        if (active.user == caller) {
+          let msg : ChatMessage = {
+            id = "chat_" # Time.now().toText();
+            senderIsAdmin = false;
+            text;
+            timestamp = Time.now();
+          };
+          chatMessages.add(msg);
+          return;
+        };
+      };
+      case (null) {};
+    };
+    Runtime.trap("You are not the active chat user");
+  };
+
+  // Get chat messages (active user or admin)
+  public query ({ caller }) func getChatMessages() : async [ChatMessage] {
+    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
+    let isUser = switch (activeChatUser) {
+      case (?active) { active.user == caller };
+      case (null) { false };
+    };
+    if (not isAdmin and not isUser) {
+      return [];
+    };
+    chatMessages.toArray();
+  };
+
+  // Admin: get active chat info
+  public query ({ caller }) func getActiveChatInfo() : async ?ActiveChatInfo {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+    switch (activeChatUser) {
+      case (null) { null };
+      case (?entry) { ?{ user = entry.user; mobileNumber = entry.mobileNumber; joinedAt = entry.joinedAt } };
+    };
+  };
+
+  // Admin: get full chat queue
+  public query ({ caller }) func getChatQueueList() : async [ChatQueueEntry] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+    chatQueue.toArray();
+  };
+
+  // Admin: send message in active chat
+  public shared ({ caller }) func adminSendChatMessage(text : Text) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+    let msg : ChatMessage = {
+      id = "chat_admin_" # Time.now().toText();
+      senderIsAdmin = true;
+      text;
+      timestamp = Time.now();
+    };
+    chatMessages.add(msg);
+  };
+
+  // Admin: end current chat and promote next user
+  public shared ({ caller }) func endCurrentChat() : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+    if (chatQueue.isEmpty()) {
+      activeChatUser := null;
+      chatMessages := List.empty<ChatMessage>();
+    } else {
+      // Pop first element from queue
+      var promoted : ?ChatQueueEntry = null;
+      let rest2 = List.empty<ChatQueueEntry>();
+      var isFirst2 = true;
+      for (entry in chatQueue.values()) {
+        if (isFirst2) { promoted := ?entry; isFirst2 := false }
+        else { rest2.add(entry) };
+      };
+      chatQueue := rest2;
+      activeChatUser := promoted;
+      chatMessages := List.empty<ChatMessage>();
+    };
+  };
+
+
+
 };

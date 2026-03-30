@@ -67,7 +67,7 @@ function AdminApp() {
 // ─── User App ─────────────────────────────────────────────────────────────────
 function UserApp() {
   const { identity, isInitializing, clear } = useInternetIdentity();
-  const { actor } = useActor();
+  const { actor, isFetching: actorFetching } = useActor();
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
   const { data: mpinStatus, isLoading: mpinLoading } = useGetMpinStatus();
   const [screen, setScreen] = useState<Screen>("home");
@@ -188,7 +188,7 @@ function UserApp() {
     pendingRegistration,
   ]);
 
-  const loading = identity && (profileLoading || mpinLoading);
+  const loading = identity && (profileLoading || mpinLoading || actorFetching);
 
   if (isInitializing || loading) {
     return (

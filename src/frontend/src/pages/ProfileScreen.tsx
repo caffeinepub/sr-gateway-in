@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Copy, LogOut, Mail, User, Zap } from "lucide-react";
+import { Copy, LogOut, Mail, MessageCircle, User, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Screen } from "../App";
@@ -393,6 +393,29 @@ export default function ProfileScreen({ onNavigate }: ProfileScreenProps) {
             <p className="text-xs text-muted-foreground">
               sk190rihan@gmail.com
             </p>
+          </div>
+        </button>
+
+        {/* Live Chat Support */}
+        <button
+          type="button"
+          data-ocid="profile.livechat.button"
+          onClick={() => onNavigate("livechat")}
+          className="w-full flex items-center gap-3 p-4 bg-card border border-primary/30 rounded-2xl hover:border-primary/60 transition-colors"
+          style={{ boxShadow: "0 0 12px rgba(37,99,235,0.2)" }}
+        >
+          <MessageCircle className="w-5 h-5 text-primary" />
+          <div className="text-left">
+            <p className="font-medium text-foreground text-sm">
+              Live Chat Support
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Admin se seedha baat karo
+            </p>
+          </div>
+          <div className="flex items-center gap-1 ml-auto">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-emerald-400 font-medium">Live</span>
           </div>
         </button>
 

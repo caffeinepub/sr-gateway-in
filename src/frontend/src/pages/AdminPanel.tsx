@@ -12,10 +12,13 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  MessageCircle,
+  Send,
   Upload,
+  Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
   ApiConfig,
@@ -25,11 +28,16 @@ import type {
 import { useBlobStorage } from "../hooks/useBlobStorage";
 import {
   useAdjustBalance,
+  useAdminSendChatMessage,
   useAllUsers,
   useApiConfig,
   useApproveApiActivation,
   useApproveDeposit,
   useApproveWithdrawal,
+  useEndCurrentChat,
+  useGetActiveChatInfo,
+  useGetAdminChatMessages,
+  useGetChatQueueList,
   usePaymentSettings,
   usePendingApiActivations,
   usePendingDeposits,
@@ -114,6 +122,12 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
       icon: "📢",
       label: "Global Message",
       desc: "Sab users ko message bhejo",
+    },
+    {
+      id: "livechat",
+      icon: "💬",
+      label: "Live Chat",
+      desc: "Users ke saath live chat karo",
     },
   ];
 
@@ -232,6 +246,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
               </div>
             )}
             {activeSection === "globalmessage" && <GlobalMessageTab />}
+            {activeSection === "livechat" && <AdminLiveChatTab />}
           </div>
         )}
       </div>
@@ -1194,6 +1209,220 @@ function GlobalMessageTab() {
       >
         {sendMsg.isPending ? "Bhej raha hai..." : "📢 Sab Users Ko Bhejo"}
       </Button>
+    </div>
+  );
+}
+
+// ─── Admin Live Chat Tab ───────────────────────────────────────────────────────
+function AdminLiveChatTab() {
+  const [messageText, setMessageText] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: activeChatInfo } = useGetActiveChatInfo();
+  const { data: queueList = [] } = useGetChatQueueList();
+  const { data: messages = [] } = useGetAdminChatMessages();
+  const adminSend = useAdminSendChatMessage();
+  const endChat = useEndCurrentChat();
+
+  // Auto-scroll
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    const text = messageText.trim();
+    if (!text) return;
+    try {
+      await adminSend.mutateAsync(text);
+      setMessageText("");
+    } catch {
+      toast.error("Message send nahi hua.");
+    }
+  };
+
+  const handleEndChat = async () => {
+    try {
+      await endChat.mutateAsync();
+      toast.success("Chat khatam. Next user automatically join hoga.");
+    } catch {
+      toast.error("Chat end nahi hua. Dobara try karo.");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Active chat info */}
+      <div
+        className="bg-card border border-primary/30 rounded-2xl p-4 space-y-3"
+        style={{ boxShadow: "0 0 14px rgba(37,99,235,0.15)" }}
+        data-ocid="admin.livechat.card"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-primary" />
+            <p className="font-bold text-foreground text-sm">Active Chat</p>
+          </div>
+          {activeChatInfo ? (
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs text-emerald-400 font-medium">Live</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Idle</span>
+            </div>
+          )}
+        </div>
+
+        {activeChatInfo ? (
+          <>
+            <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                Abhi baat kar rahe hain:
+              </p>
+              <p className="text-base font-bold text-primary mt-0.5">
+                {activeChatInfo.mobileNumber}
+              </p>
+            </div>
+
+            {/* Messages */}
+            <div
+              className="h-64 overflow-y-auto space-y-2 pr-1"
+              ref={scrollRef}
+            >
+              {(messages as any[]).length === 0 && (
+                <p
+                  className="text-center text-muted-foreground text-xs py-4"
+                  data-ocid="admin.livechat.messages.empty_state"
+                >
+                  Koi message nahi abhi.
+                </p>
+              )}
+              {(messages as any[]).map((msg: any) => (
+                <div
+                  key={String(msg.id)}
+                  className={`flex ${msg.senderIsAdmin ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] px-3 py-2 rounded-xl text-xs ${
+                      msg.senderIsAdmin
+                        ? "bg-primary text-white rounded-tr-sm"
+                        : "bg-muted border border-border text-foreground rounded-tl-sm"
+                    }`}
+                  >
+                    {!msg.senderIsAdmin && (
+                      <p className="text-primary font-semibold mb-0.5 text-xs">
+                        User
+                      </p>
+                    )}
+                    <p>{msg.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Send message */}
+            <div className="flex gap-2">
+              <input
+                data-ocid="admin.livechat.message.input"
+                type="text"
+                placeholder="Reply likhein..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 bg-muted border border-border rounded-xl px-3 h-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                type="button"
+                data-ocid="admin.livechat.send.button"
+                onClick={handleSend}
+                disabled={!messageText.trim() || adminSend.isPending}
+                className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center disabled:opacity-40"
+                style={{ boxShadow: "0 0 12px rgba(37,99,235,0.5)" }}
+              >
+                <Send className="w-4 h-4 text-white" />
+              </button>
+            </div>
+
+            {/* End chat button */}
+            <button
+              type="button"
+              data-ocid="admin.livechat.end_chat.button"
+              onClick={handleEndChat}
+              disabled={endChat.isPending}
+              className="w-full py-3 rounded-xl border border-destructive/40 text-destructive text-sm font-semibold hover:bg-destructive/10 transition-colors"
+            >
+              {endChat.isPending
+                ? "Khatam ho raha hai..."
+                : "✕ Chat Khatam Karo (Next User Aayega)"}
+            </button>
+          </>
+        ) : (
+          <div
+            className="text-center py-6 text-muted-foreground text-sm"
+            data-ocid="admin.livechat.empty_state"
+          >
+            <MessageCircle className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+            Koi user abhi chat mein nahi hai.
+          </div>
+        )}
+      </div>
+
+      {/* Waiting queue */}
+      <div
+        className="bg-card border border-border rounded-2xl p-4 space-y-3"
+        data-ocid="admin.livechat.queue.card"
+      >
+        <div className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-amber-400" />
+          <p className="font-bold text-foreground text-sm">
+            Waiting Queue ({(queueList as any[]).length})
+          </p>
+        </div>
+        {(queueList as any[]).length === 0 ? (
+          <p
+            className="text-xs text-muted-foreground py-2"
+            data-ocid="admin.livechat.queue.empty_state"
+          >
+            Queue mein koi nahi hai.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {(queueList as any[]).map((entry: any, idx: number) => (
+              <div
+                key={String(entry.user)}
+                data-ocid={`admin.livechat.queue.item.${idx + 1}`}
+                className="flex items-center gap-3 px-3 py-2.5 bg-muted rounded-xl"
+              >
+                <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-amber-400">
+                    #{idx + 1}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {entry.mobileNumber}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    Wait kar raha hai...
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

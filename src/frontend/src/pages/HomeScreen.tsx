@@ -5,6 +5,7 @@ import {
   Droplets,
   Flame,
   Megaphone,
+  MessageCircle,
   Plus,
   Shield,
   Smartphone,
@@ -264,6 +265,37 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             ))}
           </div>
         </div>
+
+        {/* Live Chat Support */}
+        <button
+          type="button"
+          data-ocid="livechat.open_modal_button"
+          onClick={() => onNavigate("livechat")}
+          className="w-full flex items-center gap-4 p-4 bg-card border border-primary/30 rounded-2xl hover:border-primary/60 hover:bg-primary/5 transition-all"
+          style={{ boxShadow: "0 0 18px rgba(37,99,235,0.25)" }}
+        >
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+            style={{
+              background: "linear-gradient(135deg, #0f1e4a, #1a3a7a)",
+              boxShadow: "0 0 16px rgba(37,99,235,0.5)",
+            }}
+          >
+            <MessageCircle className="w-6 h-6 text-primary" />
+          </div>
+          <div className="text-left flex-1">
+            <p className="font-bold text-foreground text-sm">
+              Live Chat Support
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Admin se seedha baat karo — instant support
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-emerald-400 font-medium">Live</span>
+          </div>
+        </button>
       </div>
 
       <footer className="text-center py-4 px-4 text-xs text-muted-foreground border-t border-border">

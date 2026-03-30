@@ -177,3 +177,41 @@ export interface backendInterface {
 }
 
 // Message types added for Update 15A
+
+// Live Chat Support types
+export interface ChatMessage {
+    id: string;
+    senderIsAdmin: boolean;
+    text: string;
+    timestamp: Time;
+}
+
+export interface ChatQueueEntry {
+    user: Principal;
+    mobileNumber: string;
+    joinedAt: Time;
+}
+
+export interface ChatQueueStatus {
+    position: bigint;
+    isActive: boolean;
+    queueLength: bigint;
+    mobileNumber: string;
+}
+
+export interface ActiveChatInfo {
+    user: Principal;
+    mobileNumber: string;
+    joinedAt: Time;
+}
+
+// Add to backendInterface:
+// joinChatQueue(mobileNumber: string): Promise<ChatQueueStatus>
+// leaveChatQueue(): Promise<void>
+// getChatQueueStatus(): Promise<ChatQueueStatus>
+// sendChatMessage(text: string): Promise<void>
+// getChatMessages(): Promise<Array<ChatMessage>>
+// getActiveChatInfo(): Promise<ActiveChatInfo | null>
+// getChatQueueList(): Promise<Array<ChatQueueEntry>>
+// adminSendChatMessage(text: string): Promise<void>
+// endCurrentChat(): Promise<void>

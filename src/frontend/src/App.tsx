@@ -15,6 +15,7 @@ import {
 import AddFundsScreen from "./pages/AddFundsScreen";
 import AdminPanel from "./pages/AdminPanel";
 import HomeScreen from "./pages/HomeScreen";
+import LiveChatScreen from "./pages/LiveChatScreen";
 import LoginScreen from "./pages/LoginScreen";
 import MyApiScreen from "./pages/MyApiScreen";
 import P2PScreen from "./pages/P2PScreen";
@@ -34,7 +35,8 @@ export type Screen =
   | "p2p"
   | "transactions"
   | "profile"
-  | "myapi";
+  | "myapi"
+  | "livechat";
 
 // ─── Admin App ────────────────────────────────────────────────────────────────
 function AdminApp() {
@@ -333,6 +335,9 @@ function UserApp() {
           {screen === "profile" && <ProfileScreen onNavigate={setScreen} />}
           {screen === "myapi" && (
             <MyApiScreen onBack={() => setScreen("profile")} />
+          )}
+          {screen === "livechat" && (
+            <LiveChatScreen onBack={() => setScreen("home")} />
           )}
         </main>
         {mainScreens.includes(screen) && (

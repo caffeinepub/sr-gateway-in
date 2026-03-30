@@ -507,3 +507,144 @@ export function useSendGlobalMessage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["messages"] }),
   });
 }
+
+// ─── Live Chat Hooks ───────────────────────────────────────────────────────────
+
+export function useJoinChatQueue() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (mobileNumber: string) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).joinChatQueue(mobileNumber);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chatQueueStatus"] });
+    },
+  });
+}
+
+export function useLeaveChatQueue() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).leaveChatQueue();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chatQueueStatus"] });
+      qc.invalidateQueries({ queryKey: ["chatMessages"] });
+    },
+  });
+}
+
+export function useGetChatQueueStatus(enabled: boolean) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["chatQueueStatus"],
+    queryFn: async () => {
+      if (!actor) return null;
+      return (actor as any).getChatQueueStatus();
+    },
+    enabled: enabled && !!actor && !isFetching,
+    refetchInterval: enabled ? 3000 : false,
+  });
+}
+
+export function useSendChatMessage() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).sendChatMessage(text);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chatMessages"] });
+    },
+  });
+}
+
+export function useGetChatMessages(enabled: boolean) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["chatMessages"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getChatMessages();
+    },
+    enabled: enabled && !!actor && !isFetching,
+    refetchInterval: enabled ? 3000 : false,
+  });
+}
+
+export function useGetActiveChatInfo() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["activeChatInfo"],
+    queryFn: async () => {
+      if (!actor) return null;
+      const result = await (actor as any).getActiveChatInfo();
+      return Array.isArray(result) ? (result[0] ?? null) : result;
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 3000,
+  });
+}
+
+export function useGetChatQueueList() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["chatQueueList"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getChatQueueList();
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 3000,
+  });
+}
+
+export function useAdminSendChatMessage() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).adminSendChatMessage(text);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["adminChatMessages"] });
+    },
+  });
+}
+
+export function useEndCurrentChat() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).endCurrentChat();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["activeChatInfo"] });
+      qc.invalidateQueries({ queryKey: ["chatQueueList"] });
+      qc.invalidateQueries({ queryKey: ["adminChatMessages"] });
+    },
+  });
+}
+
+export function useGetAdminChatMessages() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["adminChatMessages"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getChatMessages();
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 3000,
+  });
+}
