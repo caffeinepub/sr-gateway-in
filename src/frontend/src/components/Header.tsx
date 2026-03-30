@@ -18,26 +18,46 @@ export default function Header({
   const { data: unreadCount } = useUnreadMessageCount();
   const initials = profile?.displayName?.slice(0, 2).toUpperCase() || "SR";
   const unread = Number(unreadCount ?? 0n);
-  const prevUnreadRef = useRef<number>(unread);
+  const prevUnreadRef = useRef<number>(-1); // -1 means not yet initialized
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
+    // Skip notification on first data load (initialization)
+    if (!hasInitializedRef.current) {
+      if (unreadCount !== undefined) {
+        // First real data arrived -- set baseline without playing sound
+        prevUnreadRef.current = unread;
+        hasInitializedRef.current = true;
+      }
+      return;
+    }
+
     if (unread > prevUnreadRef.current) {
       // New message arrived -- play voice notification
-      try {
-        const utterance = new SpeechSynthesisUtterance(
-          "Naya message aaya hai, please check kariye",
-        );
-        utterance.lang = "hi-IN";
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        window.speechSynthesis.speak(utterance);
-      } catch (_e) {
-        // Speech not supported, silently ignore
-      }
+      const playVoice = () => {
+        try {
+          if (window.speechSynthesis) {
+            // Cancel any ongoing speech first
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(
+              "Naya message aaya hai, please check kariye",
+            );
+            utterance.lang = "hi-IN";
+            utterance.rate = 0.85;
+            utterance.pitch = 1.1;
+            utterance.volume = 1;
+            window.speechSynthesis.speak(utterance);
+          }
+        } catch (_e) {
+          // Speech not supported, silently ignore
+        }
+      };
+
+      // Small delay to ensure browser allows speech synthesis
+      setTimeout(playVoice, 300);
     }
     prevUnreadRef.current = unread;
-  }, [unread]);
+  }, [unread, unreadCount]);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 bg-card border-b border-border sticky top-0 z-10">
@@ -86,7 +106,7 @@ export default function Header({
         >
           <MessageSquare className="w-4 h-4" />
           {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-[3px] shadow-lg">
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-[3px] shadow-lg animate-pulse">
               {unread > 99 ? "99+" : unread}
             </span>
           )}

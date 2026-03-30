@@ -1142,10 +1142,22 @@ function GlobalMessageTab() {
     if (!text.trim()) return;
     try {
       await sendMsg.mutateAsync(text.trim());
-      toast.success("Global message bhej diya!");
+      toast.success(
+        "Global message bhej diya! Sabhi users ko message mil jayega.",
+      );
       setText("");
-    } catch {
-      toast.error("Message send nahi hua, dobara try karo");
+    } catch (err: any) {
+      const errMsg = err?.message || String(err) || "";
+      if (
+        errMsg.toLowerCase().includes("unauthorized") ||
+        errMsg.toLowerCase().includes("admin")
+      ) {
+        toast.error(
+          "Admin access nahi hai. Caffeine dashboard se admin link use karein.",
+        );
+      } else {
+        toast.error(`Message send nahi hua: ${errMsg || "dobara try karo"}`);
+      }
     }
   };
 

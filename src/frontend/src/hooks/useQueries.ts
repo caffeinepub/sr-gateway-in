@@ -464,7 +464,7 @@ export function useGetMessages() {
       return (actor as any).getMessages() as Promise<any[]>;
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 15000, // Poll every 15 seconds
+    refetchInterval: 10000, // Poll every 10 seconds for faster notifications
   });
 }
 
@@ -477,7 +477,7 @@ export function useUnreadMessageCount() {
       return (actor as any).getUnreadMessageCount() as Promise<bigint>;
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 15000,
+    refetchInterval: 10000,
   });
 }
 

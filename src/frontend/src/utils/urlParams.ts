@@ -42,6 +42,10 @@ export function getUrlParameter(paramName: string): string | null {
 export function storeSessionParameter(key: string, value: string): void {
   try {
     sessionStorage.setItem(key, value);
+    // Also persist admin token to localStorage for cross-session persistence
+    if (key === "caffeineAdminToken") {
+      localStorage.setItem(key, value);
+    }
   } catch (error) {
     console.warn(`Failed to store session parameter ${key}:`, error);
   }
@@ -55,7 +59,17 @@ export function storeSessionParameter(key: string, value: string): void {
  */
 export function getSessionParameter(key: string): string | null {
   try {
-    return sessionStorage.getItem(key);
+    const val = sessionStorage.getItem(key);
+    if (val !== null) return val;
+    // Fallback to localStorage for admin token (persists across browser sessions)
+    if (key === "caffeineAdminToken") {
+      const lsVal = localStorage.getItem(key);
+      if (lsVal !== null) {
+        sessionStorage.setItem(key, lsVal); // restore to session
+        return lsVal;
+      }
+    }
+    return null;
   } catch (error) {
     console.warn(`Failed to retrieve session parameter ${key}:`, error);
     return null;

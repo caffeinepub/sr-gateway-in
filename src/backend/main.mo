@@ -181,6 +181,7 @@ actor {
   let messages = Map.empty<Principal, List.List<Text>>(); // kept for backward compat
   let userMessages = Map.empty<Principal, List.List<Message>>();
   var globalMessages = List.empty<Message>();
+  let globalReadTimestamps = Map.empty<Principal, Time.Time>(); // per-user read tracking
   let mpinStore = Map.empty<Principal, MpinData>();
   let credentialsStore = Map.empty<Principal, UserCredentials>();
   var paymentSettings : PaymentSettings = {
@@ -969,9 +970,15 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
+    let userReadTime : Time.Time = switch (globalReadTimestamps.get(caller)) {
+      case (null) { 0 };
+      case (?t) { t };
+    };
     let result = List.empty<Message>();
-    // Global messages
-    for (gm in globalMessages.values()) { result.add(gm) };
+    // Global messages with per-user isRead tracking
+    for (gm in globalMessages.values()) {
+      result.add({ gm with isRead = gm.timestamp <= userReadTime });
+    };
     // Personal messages
     switch (userMessages.get(caller)) {
       case (null) {};
@@ -984,10 +991,16 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
-    var count : Nat = 0;
-    for (gm in globalMessages.values()) {
-      if (not gm.isRead) { count += 1 };
+    let userReadTime : Time.Time = switch (globalReadTimestamps.get(caller)) {
+      case (null) { 0 };
+      case (?t) { t };
     };
+    var count : Nat = 0;
+    // Global messages: unread if sent after user's last read timestamp
+    for (gm in globalMessages.values()) {
+      if (gm.timestamp > userReadTime) { count += 1 };
+    };
+    // Personal messages
     switch (userMessages.get(caller)) {
       case (null) {};
       case (?list) {
@@ -1003,6 +1016,8 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
+    // Track per-user global read timestamp
+    globalReadTimestamps.add(caller, Time.now());
     // Mark personal messages as read
     switch (userMessages.get(caller)) {
       case (null) {};
@@ -1012,10 +1027,6 @@ actor {
         userMessages.add(caller, updated);
       };
     };
-    // Global messages read state -- update globally
-    let updatedGlobal = List.empty<Message>();
-    for (gm in globalMessages.values()) { updatedGlobal.add({ gm with isRead = true }) };
-    globalMessages := updatedGlobal;
   };
 
   public shared ({ caller }) func sendGlobalMessage(text : Text) : async () {
