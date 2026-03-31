@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Menu, MessageSquare } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useCallerProfile, useUnreadMessageCount } from "../hooks/useQueries";
+import { parseDisplayName } from "../utils/displayName";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -16,7 +17,8 @@ export default function Header({
 }: HeaderProps) {
   const { data: profile } = useCallerProfile();
   const { data: unreadCount } = useUnreadMessageCount();
-  const initials = profile?.displayName?.slice(0, 2).toUpperCase() || "SR";
+  const parsedProfile = parseDisplayName(profile?.displayName || "");
+  const initials = parsedProfile.name?.slice(0, 2).toUpperCase() || "SR";
   const unread = Number(unreadCount ?? 0n);
   const prevUnreadRef = useRef<number>(-1); // -1 means not yet initialized
   const hasInitializedRef = useRef(false);

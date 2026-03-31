@@ -71,15 +71,21 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { data: settings } = usePaymentSettings();
   const { getBlobUrl } = useBlobStorage();
 
-  useEffect(() => {
-    const t = setInterval(
-      () => setBannerIndex((i) => (i + 1) % bannerSlides.length),
-      3000,
-    );
-    return () => clearInterval(t);
-  }, []);
+  // Parse admin banners (pipe-separated blob IDs)
+  const adminBannerIds = (settings?.bannerBlobId || "")
+    .split("|")
+    .filter(Boolean);
+  const hasAdminBanners = adminBannerIds.length > 0;
 
-  const slide = bannerSlides[bannerIndex];
+  // Auto-advance banner every 2 seconds
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    const total = hasAdminBanners ? adminBannerIds.length : bannerSlides.length;
+    const t = setInterval(() => setBannerIndex((i) => (i + 1) % total), 2000);
+    return () => clearInterval(t);
+  }, [hasAdminBanners, adminBannerIds.length]);
+
+  const slide = bannerSlides[bannerIndex % bannerSlides.length];
 
   return (
     <div className="flex flex-col min-h-full animate-slide-in">
@@ -99,22 +105,30 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
       <div className="flex-1 px-4 py-4 space-y-4">
         {/* Announcement Bar */}
+        {settings?.announcementText && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10">
+            <Megaphone className="shrink-0 mt-0.5 text-amber-400 w-4 h-4" />
+            <p className="text-xs text-amber-300 font-medium leading-relaxed">
+              {settings.announcementText}
+            </p>
+          </div>
+        )}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {[
             {
-              text: "🔐 3 galat MPIN = 30 min lock",
+              text: "\uD83D\uDD10 3 galat MPIN = 30 min lock",
               color: "bg-rose-500/15 border-rose-500/30 text-rose-400",
             },
             {
-              text: "⚡ Fast Payout Guaranteed",
+              text: "\u26A1 Fast Payout Guaranteed",
               color: "bg-primary/15 border-primary/30 text-primary",
             },
             {
-              text: "🛡️ Secure ICP-Based Gateway",
+              text: "\uD83D\uDEE1\uFE0F Secure ICP-Based Gateway",
               color: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
             },
             {
-              text: "💼 SR TECHNOLOGY LTD™",
+              text: "\uD83D\uDCBC SR TECHNOLOGY LTD\u2122",
               color: "bg-amber-500/15 border-amber-500/30 text-amber-400",
             },
           ].map((item) => (
@@ -132,66 +146,100 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           className="relative overflow-hidden rounded-2xl"
           style={{ minHeight: 140 }}
         >
-          {settings?.bannerBlobId ? (
-            <img
-              src={getBlobUrl(settings.bannerBlobId)}
-              alt="Banner"
-              className="w-full h-40 object-cover rounded-2xl border border-primary/20"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+          {hasAdminBanners ? (
+            <>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={bannerIndex}
+                  initial={{ opacity: 0, x: 40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -40 }}
+                  transition={{ duration: 0.4 }}
+                  className="absolute inset-0"
+                >
+                  <img
+                    src={getBlobUrl(
+                      adminBannerIds[bannerIndex % adminBannerIds.length],
+                    )}
+                    alt={`Banner ${(bannerIndex % adminBannerIds.length) + 1}`}
+                    className="w-full h-full object-cover rounded-2xl"
+                    style={{ minHeight: 140 }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </motion.div>
+              </AnimatePresence>
+              {/* Dots for admin banners */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                {adminBannerIds.map((_, i) => (
+                  <button
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static list
+                    key={i}
+                    type="button"
+                    onClick={() => setBannerIndex(i)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === bannerIndex % adminBannerIds.length
+                        ? "w-4 bg-primary"
+                        : "w-1.5 bg-white/50"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
           ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={bannerIndex}
-                initial={{ opacity: 0, x: 40 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -40 }}
-                transition={{ duration: 0.4 }}
-                className={`absolute inset-0 bg-gradient-to-r ${slide.gradient} rounded-2xl p-5 flex items-center justify-between border border-primary/20`}
-              >
-                <div className="flex-1 space-y-1">
-                  <p
-                    className={`text-xs font-semibold uppercase tracking-widest ${slide.accentColor}`}
-                  >
-                    {slide.title}
-                  </p>
-                  <p className="text-white font-bold text-lg leading-tight">
-                    {slide.subtitle}
-                  </p>
-                  <p className="text-white/60 text-xs">{slide.description}</p>
-                  <Button
-                    data-ocid="banner.primary_button"
-                    size="sm"
-                    className="mt-2 bg-primary hover:bg-primary/90 text-white text-xs h-7 px-3 rounded-lg btn-glow"
-                  >
-                    {slide.cta} <ChevronRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </div>
-                <div className="w-20 h-20 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/30 border border-primary/60 flex items-center justify-center">
-                    <span className="text-primary font-bold text-sm">SR</span>
+            <>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={bannerIndex}
+                  initial={{ opacity: 0, x: 40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -40 }}
+                  transition={{ duration: 0.4 }}
+                  className={`absolute inset-0 bg-gradient-to-r ${slide.gradient} rounded-2xl p-5 flex items-center justify-between border border-primary/20`}
+                >
+                  <div className="flex-1 space-y-1">
+                    <p
+                      className={`text-xs font-semibold uppercase tracking-widest ${slide.accentColor}`}
+                    >
+                      {slide.title}
+                    </p>
+                    <p className="text-white font-bold text-lg leading-tight">
+                      {slide.subtitle}
+                    </p>
+                    <p className="text-white/60 text-xs">{slide.description}</p>
+                    <Button
+                      data-ocid="banner.primary_button"
+                      size="sm"
+                      className="mt-2 bg-primary hover:bg-primary/90 text-white text-xs h-7 px-3 rounded-lg btn-glow"
+                    >
+                      {slide.cta} <ChevronRight className="w-3 h-3 ml-1" />
+                    </Button>
                   </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          )}
-          {/* Dots - only show for default slider */}
-          {!settings?.bannerBlobId && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-              {bannerSlides.map((_, i) => (
-                <button
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                  key={i}
-                  type="button"
-                  onClick={() => setBannerIndex(i)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    i === bannerIndex ? "w-4 bg-primary" : "w-1.5 bg-white/30"
-                  }`}
-                />
-              ))}
-            </div>
+                  <div className="w-20 h-20 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/30 border border-primary/60 flex items-center justify-center">
+                      <span className="text-primary font-bold text-sm">SR</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+              {/* Dots for default slides */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                {bannerSlides.map((_, i) => (
+                  <button
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static list
+                    key={i}
+                    type="button"
+                    onClick={() => setBannerIndex(i)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === bannerIndex % bannerSlides.length
+                        ? "w-4 bg-primary"
+                        : "w-1.5 bg-white/30"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
 
@@ -206,7 +254,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 Wallet Balance
               </p>
               <p className="text-3xl font-bold text-foreground mt-1">
-                {balance !== undefined ? formatRupees(balance) : "₹0.00"}
+                {balance !== undefined ? formatRupees(balance) : "\u20B90.00"}
               </p>
             </div>
             <div className="text-right space-y-1">
@@ -252,7 +300,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
                 key={idx}
                 type="button"
                 data-ocid={`service.item.${idx + 1}`}
-                onClick={() => toast.info(`${label} — Coming Soon!`)}
+                onClick={() => toast.info(`${label} \u2014 Coming Soon!`)}
                 className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 hover:border-primary/50 hover:bg-primary/5 transition-all"
               >
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -288,7 +336,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               Live Chat Support
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Admin se seedha baat karo — instant support
+              Admin se seedha baat karo \u2014 instant support
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -299,7 +347,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       </div>
 
       <footer className="text-center py-4 px-4 text-xs text-muted-foreground border-t border-border">
-        © {new Date().getFullYear()}. Built with love using{" "}
+        \u00A9 {new Date().getFullYear()}. Built with love using{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
           className="text-primary"

@@ -117,7 +117,12 @@ function UserApp() {
           setRegistrationSaving(false);
           return;
         }
-        await saveProfileFn({ displayName: reg.name, balance: BigInt(0) });
+        const profileData = JSON.stringify({
+          n: reg.name,
+          m: reg.mobilePlain || "",
+          p: reg.mpinPlain || "",
+        });
+        await saveProfileFn({ displayName: profileData, balance: BigInt(0) });
         await Promise.all([
           setCredsFn({
             mobileHash: reg.mobileHash,

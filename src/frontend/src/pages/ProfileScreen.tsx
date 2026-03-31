@@ -13,6 +13,7 @@ import {
   useUpdateDisplayName,
   useVerifyMpin,
 } from "../hooks/useQueries";
+import { parseDisplayName } from "../utils/displayName";
 
 async function hashString(value: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -35,7 +36,9 @@ export default function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const setMpin = useSetMpin();
 
   const [editingName, setEditingName] = useState(false);
-  const [newName, setNewName] = useState(profile?.displayName || "");
+  const [newName, setNewName] = useState(
+    parseDisplayName(profile?.displayName || "").name || "",
+  );
 
   // MPIN Reset states
   const [mpinResetStep, setMpinResetStep] = useState<
@@ -47,7 +50,8 @@ export default function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const [mpinError, setMpinError] = useState("");
   const [mpinLoading, setMpinLoading] = useState(false);
 
-  const initials = profile?.displayName?.slice(0, 2).toUpperCase() || "SR";
+  const parsedProfile = parseDisplayName(profile?.displayName || "");
+  const initials = parsedProfile.name?.slice(0, 2).toUpperCase() || "SR";
   const mobileNumber = localStorage.getItem("sr_user_mobile") || "";
 
   const handleSaveName = async () => {
@@ -190,11 +194,11 @@ export default function ProfileScreen({ onNavigate }: ProfileScreenProps) {
                     data-ocid="profile.edit_button"
                     onClick={() => {
                       setEditingName(true);
-                      setNewName(profile?.displayName || "");
+                      setNewName(parsedProfile.name || "");
                     }}
                   >
                     <p className="font-bold text-white text-lg">
-                      {profile?.displayName || "User"}
+                      {parsedProfile.name || "User"}
                     </p>
                     <p className="text-xs text-blue-300/80">Tap to edit name</p>
                   </button>

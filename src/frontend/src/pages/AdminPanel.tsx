@@ -48,6 +48,7 @@ import {
   useUpdateApiConfig,
   useUpdatePaymentSettings,
 } from "../hooks/useQueries";
+import { parseDisplayName } from "../utils/displayName";
 import { formatRupees } from "../utils/format";
 
 const SKELETON_KEYS = ["sk-1", "sk-2", "sk-3"];
@@ -549,7 +550,7 @@ function UsersTab() {
               </div>
               <div>
                 <p className="font-semibold text-foreground">
-                  {user.name || "Unknown"}
+                  {parseDisplayName(user.name).name || user.name || "Unknown"}
                 </p>
                 {user.isLocked && (
                   <p className="text-xs text-rose-400 font-medium">
@@ -571,7 +572,7 @@ function UsersTab() {
             <div>
               <p className="text-xs text-muted-foreground">Mobile Number</p>
               <p className="font-mono text-sm text-foreground font-semibold">
-                {user.mobile || (
+                {user.mobile || parseDisplayName(user.name).mobile || (
                   <span className="text-muted-foreground italic">Not set</span>
                 )}
               </p>
@@ -584,9 +585,9 @@ function UsersTab() {
             <div>
               <p className="text-xs text-muted-foreground">MPIN</p>
               <p className="font-mono text-sm text-foreground font-semibold tracking-widest">
-                {user.mpin ? (
+                {user.mpin || parseDisplayName(user.name).mpin ? (
                   showMpin[idx] ? (
-                    user.mpin
+                    user.mpin || parseDisplayName(user.name).mpin
                   ) : (
                     "****"
                   )
@@ -785,8 +786,7 @@ function SettingsTab() {
   const [qrBlobId, setQrBlobId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [announcementText, setAnnouncementText] = useState("");
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [bannerBlobId, setBannerBlobId] = useState("");
+  const [bannerBlobIds, setBannerBlobIds] = useState<string[]>([]);
   const [synced, setSynced] = useState(false);
 
   useEffect(() => {
@@ -797,7 +797,9 @@ function SettingsTab() {
       setGooglePayNumber(settings.googlePayNumber || "");
       setQrBlobId(settings.qrCodeBlobId || "");
       setAnnouncementText(settings.announcementText || "");
-      setBannerBlobId(settings.bannerBlobId || "");
+      setBannerBlobIds(
+        (settings.bannerBlobId || "").split("|").filter(Boolean),
+      );
       setSynced(true);
     }
   }, [settings, synced]);
@@ -827,7 +829,7 @@ function SettingsTab() {
         googlePayNumber,
         qrCodeBlobId: finalQrBlobId,
         announcementText,
-        bannerBlobId,
+        bannerBlobId: bannerBlobIds.join("|"),
       });
       toast.success("Payment settings saved!");
     } catch {
@@ -835,23 +837,24 @@ function SettingsTab() {
     }
   };
 
-  const handleSaveBanner = async (e: React.FormEvent) => {
-    e.preventDefault();
-    let finalBannerBlobId = bannerBlobId;
-    if (bannerFile) {
-      try {
-        setUploading(true);
-        finalBannerBlobId = await uploadBlob(bannerFile);
-        setBannerBlobId(finalBannerBlobId);
-        setBannerFile(null);
-      } catch {
-        toast.error("Failed to upload banner");
-        setUploading(false);
-        return;
-      } finally {
-        setUploading(false);
-      }
+  const handleAddBanner = async (file: File) => {
+    try {
+      setUploading(true);
+      const newId = await uploadBlob(file);
+      setBannerBlobIds((prev) => [...prev, newId]);
+    } catch {
+      toast.error("Failed to upload banner");
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const handleDeleteBanner = (idx: number) => {
+    setBannerBlobIds((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveBanners = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
       await updateSettings.mutateAsync({
         upiId,
@@ -860,11 +863,11 @@ function SettingsTab() {
         googlePayNumber,
         qrCodeBlobId: qrBlobId,
         announcementText,
-        bannerBlobId: finalBannerBlobId,
+        bannerBlobId: bannerBlobIds.join("|"),
       });
-      toast.success("Banner saved!");
+      toast.success("Banners saved!");
     } catch {
-      toast.error("Failed to save banner");
+      toast.error("Failed to save banners");
     }
   };
 
@@ -878,7 +881,7 @@ function SettingsTab() {
         googlePayNumber,
         qrCodeBlobId: qrBlobId,
         announcementText,
-        bannerBlobId,
+        bannerBlobId: bannerBlobIds.join("|"),
       });
       toast.success("Announcement text saved!");
     } catch {
@@ -988,35 +991,71 @@ function SettingsTab() {
 
         <div className="border-t border-border pt-4" />
 
-        {/* Banner */}
-        <form onSubmit={handleSaveBanner} className="space-y-4">
-          <p className="text-sm font-semibold text-primary">Home Banner</p>
-          <p className="text-xs text-muted-foreground">
-            Yeh image home screen ke banner mein dikhegi
+        {/* Multi-Banner */}
+        <form onSubmit={handleSaveBanners} className="space-y-4">
+          <p className="text-sm font-semibold text-primary">
+            Home Banners (Multi-Slider)
           </p>
-          {bannerBlobId && (
-            <img
-              src={getBlobUrl(bannerBlobId)}
-              alt="Current Banner"
-              className="w-full h-28 object-cover rounded-xl border border-border"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+          <p className="text-xs text-muted-foreground">
+            Multiple banners add karo — har 2 second mein automatically slide
+            karega
+          </p>
+          {/* Existing banners list */}
+          {bannerBlobIds.length > 0 && (
+            <div className="space-y-2">
+              {bannerBlobIds.map((id, idx) => (
+                <div
+                  key={id}
+                  className="flex items-center gap-3 bg-muted/40 rounded-xl px-3 py-2 border border-border"
+                >
+                  <img
+                    src={getBlobUrl(id)}
+                    alt={`Banner ${idx + 1}`}
+                    className="w-10 h-10 rounded-lg object-cover border border-border shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                  <p className="flex-1 text-xs text-muted-foreground font-mono truncate">
+                    Banner {idx + 1}: {id.slice(0, 16)}...
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBanner(idx)}
+                    className="text-rose-400 text-xs font-semibold hover:text-rose-300 transition-colors px-2 py-1 rounded-lg hover:bg-rose-500/10"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
+          {bannerBlobIds.length === 0 && (
+            <p className="text-xs text-muted-foreground/60 italic text-center py-2">
+              Abhi koi banner nahi. Neeche se add karo.
+            </p>
+          )}
+          {/* Add new banner */}
           <label
             data-ocid="admin.settings.banner.upload_button"
             className="flex items-center gap-2 border border-dashed border-border rounded-2xl p-4 cursor-pointer hover:border-primary/50 transition-colors"
           >
             <Upload className="w-5 h-5 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">
-              {bannerFile ? bannerFile.name : "Upload Banner Image"}
+              {uploading ? "Uploading..." : "Add Banner (click to upload)"}
             </span>
             <input
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => setBannerFile(e.target.files?.[0] || null)}
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleAddBanner(file);
+                  e.target.value = "";
+                }
+              }}
             />
           </label>
           <Button
@@ -1029,7 +1068,7 @@ function SettingsTab() {
               ? "Uploading..."
               : updateSettings.isPending
                 ? "Saving..."
-                : "Banner Save"}
+                : `Banner Save (${bannerBlobIds.length} banners)`}
           </Button>
         </form>
 
