@@ -66,7 +66,7 @@ function AdminApp() {
 
 // ─── User App ─────────────────────────────────────────────────────────────────
 function UserApp() {
-  const { identity, isInitializing, clear } = useInternetIdentity();
+  const { identity, isInitializing, clear, login } = useInternetIdentity();
   const { actor, isFetching: actorFetching } = useActor();
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
   const { data: mpinStatus, isLoading: mpinLoading } = useGetMpinStatus();
@@ -217,6 +217,7 @@ function UserApp() {
             onRegisterReady={(data) => {
               setRegistrationError("");
               setPendingRegistration(data);
+              login();
             }}
             registrationError={registrationError}
           />
@@ -229,6 +230,7 @@ function UserApp() {
         <LoginScreen
           onCredentialsReady={(mobileHash, passwordHash) => {
             setPendingCreds({ mobileHash, passwordHash });
+            login();
             setCredentialsVerified(false);
             setCredentialError("");
           }}
