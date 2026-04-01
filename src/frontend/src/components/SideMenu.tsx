@@ -1,5 +1,13 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { LayoutDashboard, Mail, ScrollText, Shield, X } from "lucide-react";
+import {
+  ExternalLink,
+  LayoutDashboard,
+  Mail,
+  RotateCcw,
+  ScrollText,
+  Shield,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
@@ -9,7 +17,7 @@ interface SideMenuProps {
   onDashboard: () => void;
 }
 
-type ContentView = null | "rules" | "privacy" | "contact";
+type ContentView = null | "rules" | "contact";
 
 const rulesContent = `1. Account & Security Rules
 
@@ -49,60 +57,13 @@ const rulesContent = `1. Account & Security Rules
 
 • System updates ya maintenance ke dauran services kuch samay ke liye band ho sakti hain.`;
 
-const privacyContent = `1. Data Collection
-
-• Hum sirf woh information collect karte hain jo service ke liye zaroori hai: mobile number, transaction records, aur API usage logs.
-
-• Personal data (naam, mobile number) sirf account verification ke liye use hota hai.
-
-2. Data Security
-
-• Aapka data ICP (Internet Computer Protocol) ke secure canisters mein store hota hai.
-
-• MPIN encrypted form mein store hota hai, kisi ko bhi plain text mein access nahi hota.
-
-• Aapka MPIN kabhi bhi hamari team ke saath share nahi kiya jayega.
-
-3. Data Usage
-
-• Aapka data kisi third party ko sell nahi kiya jayega.
-
-• Transaction data sirf audit aur support ke liye use hoga.
-
-• API tokens sirf authorized merchant platforms ke saath share hote hain.
-
-4. User Rights
-
-• Aap apna account kabhi bhi delete kar sakte hain.
-
-• Kisi bhi data-related query ke liye admin se contact karein.
-
-5. Contact
-
-• SR TECHNOLOGY LTD™ ke kisi bhi privacy concern ke liye platform support se sampark karein.
-
-Last Updated: 2026`;
-
 function ContentModal({
   view,
   onClose,
 }: { view: Exclude<ContentView, null>; onClose: () => void }) {
-  const isRules = view === "rules";
-  const isContact = view === "contact";
+  // view is "rules" when not contact
 
-  const getTitle = () => {
-    if (isRules) return "📜 Official Rules & Terms";
-    if (isContact) return "✉️ Contact Us";
-    return "🔒 Privacy Policy";
-  };
-
-  const getIcon = () => {
-    if (isRules) return <ScrollText className="w-4 h-4 text-primary" />;
-    if (isContact) return <Mail className="w-4 h-4 text-primary" />;
-    return <Shield className="w-4 h-4 text-primary" />;
-  };
-
-  if (isContact) {
+  if (view === "contact") {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -163,12 +124,7 @@ function ContentModal({
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   Agar aapko koi bhi problem aa rahi hai -- chahe wo transaction
                   issue ho, account problem ho, ya koi bhi sawaal ho -- toh is
-                  email par sampark karein. Hamari team jald se jald aapki madad
-                  karega.
-                </p>
-                <p className="text-xs text-muted-foreground/70 mt-2 italic">
-                  For any enquiry, question, or issue, please write to us at the
-                  above email.
+                  email par sampark karein.
                 </p>
               </div>
             </div>
@@ -200,27 +156,24 @@ function ContentModal({
         transition={{ type: "spring", damping: 24, stiffness: 280 }}
         onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-lg bg-card border border-border rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[85vh] flex flex-col"
-        data-ocid={isRules ? "rules.modal" : "privacy.modal"}
+        data-ocid="rules.modal"
       >
-        {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card sticky top-0">
           <div className="flex items-center gap-2">
-            {getIcon()}
+            <ScrollText className="w-4 h-4 text-primary" />
             <span className="text-sm font-bold text-foreground">
-              {getTitle()}
+              📜 Official Rules & Terms
             </span>
           </div>
           <button
             type="button"
-            data-ocid={isRules ? "rules.close_button" : "privacy.close_button"}
+            data-ocid="rules.close_button"
             onClick={onClose}
             className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Org badge */}
         <div className="px-5 pt-3 pb-1">
           <div className="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-full px-3 py-1">
             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -229,11 +182,9 @@ function ContentModal({
             </span>
           </div>
         </div>
-
-        {/* Scrollable Content */}
         <ScrollArea className="flex-1 px-5 py-3">
           <div className="whitespace-pre-line text-sm text-muted-foreground leading-relaxed pb-6">
-            {isRules ? rulesContent : privacyContent}
+            {rulesContent}
           </div>
         </ScrollArea>
       </motion.div>
@@ -279,6 +230,18 @@ export default function SideMenu({
       onClick: () => {
         window.open(
           "https://www.freeprivacypolicy.com/live/d9463705-dae2-4369-a962-59c8cc429a22",
+          "_blank",
+        );
+      },
+    },
+    {
+      icon: RotateCcw,
+      label: "Refund Policy",
+      sublabel: "Returns & refunds",
+      ocid: "sidemenu.refund.button",
+      onClick: () => {
+        window.open(
+          "https://www.freeprivacypolicy.com/live/fc1b00d4-f31c-4c51-9dd8-d36ccd9aa097",
           "_blank",
         );
       },
