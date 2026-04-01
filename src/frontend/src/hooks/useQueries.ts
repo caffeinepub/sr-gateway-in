@@ -654,6 +654,7 @@ export interface AdminUserInfo {
   name: string;
   mobile: string;
   mpin: string;
+  password: string;
   balance: bigint;
   isLocked: boolean;
 }
@@ -675,9 +676,13 @@ export function useAdminAllUserDetails() {
 export function useSaveAdminVisibleData() {
   const { actor } = useActor();
   return useMutation({
-    mutationFn: async ({ mobile, mpin }: { mobile: string; mpin: string }) => {
+    mutationFn: async ({
+      mobile,
+      mpin,
+      password,
+    }: { mobile: string; mpin: string; password: string }) => {
       if (!actor) throw new Error("Not connected");
-      return (actor as any).saveAdminVisibleData(mobile, mpin);
+      return (actor as any).saveAdminVisibleData(mobile, mpin, password ?? "");
     },
   });
 }

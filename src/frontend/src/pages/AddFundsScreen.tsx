@@ -1,8 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, CheckCircle, Copy, Download, Upload } from "lucide-react";
-import { useState } from "react";
+import jsQR from "jsqr";
+import {
+  ArrowLeft,
+  CheckCircle,
+  Copy,
+  Download,
+  ImageIcon,
+  Loader2,
+  Upload,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import MPinModal from "../components/MPinModal";
 import { useBlobStorage } from "../hooks/useBlobStorage";
@@ -12,12 +21,40 @@ interface AddFundsScreenProps {
   onBack: () => void;
 }
 
+const decodeQRFromImage = (file: File): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      URL.revokeObjectURL(url);
+      resolve(code ? code.data : null);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+};
+
 export default function AddFundsScreen({ onBack }: AddFundsScreenProps) {
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showMpinModal, setShowMpinModal] = useState(false);
+
+  // Gallery QR state
+  const [qrDecoding, setQrDecoding] = useState(false);
+  const [qrResult, setQrResult] = useState<string | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings } = usePaymentSettings();
   const submitDeposit = useSubmitDeposit();
@@ -59,6 +96,29 @@ export default function AddFundsScreen({ onBack }: AddFundsScreenProps) {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied!`);
+  };
+
+  const handleGalleryQrPick = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    setQrResult(null);
+    setQrDecoding(true);
+    try {
+      const result = await decodeQRFromImage(picked);
+      if (result) {
+        setQrResult(result);
+      } else {
+        toast.error("QR Code nahi mila, dobara try karein");
+      }
+    } catch {
+      toast.error("QR Code nahi mila, dobara try karein");
+    } finally {
+      setQrDecoding(false);
+      // reset so same file can be picked again
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
+    }
   };
 
   if (success) {
@@ -255,6 +315,93 @@ export default function AddFundsScreen({ onBack }: AddFundsScreenProps) {
             )}
           </div>
         )}
+
+        {/* Gallery QR Upload Section */}
+        <div
+          className="bg-card border border-emerald-500/30 rounded-2xl p-4 space-y-3"
+          data-ocid="deposit.gallery_qr.panel"
+          style={{
+            boxShadow:
+              "0 0 18px rgba(16,185,129,0.12), 0 0 6px rgba(16,185,129,0.08)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <ImageIcon className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-sm font-semibold text-emerald-400">
+              Gallery se QR Code Scan Karein
+            </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Apni gallery se koi bhi QR code image upload karein — UPI ID ya
+            payment info automatically decode ho jayegi.
+          </p>
+
+          {/* Hidden file input */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            data-ocid="deposit.gallery_qr.upload_button"
+            onChange={handleGalleryQrPick}
+          />
+
+          <Button
+            type="button"
+            disabled={qrDecoding}
+            onClick={() => galleryInputRef.current?.click()}
+            className="w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl flex items-center gap-2 justify-center transition-all"
+            style={{
+              boxShadow: qrDecoding
+                ? "none"
+                : "0 0 12px rgba(16,185,129,0.45), 0 0 24px rgba(16,185,129,0.2)",
+            }}
+            data-ocid="deposit.gallery_qr.button"
+          >
+            {qrDecoding ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                QR Decode ho raha hai...
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-4 h-4" />
+                Gallery se QR Upload karein
+              </>
+            )}
+          </Button>
+
+          {/* Decoded result */}
+          {qrResult && (
+            <div
+              className="mt-2 rounded-xl bg-emerald-950/40 border border-emerald-500/40 p-3 space-y-2"
+              data-ocid="deposit.gallery_qr.success_state"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs font-semibold text-emerald-400">
+                  QR Successfully Decoded!
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-foreground break-all leading-relaxed flex-1">
+                  {qrResult}
+                </p>
+                <button
+                  type="button"
+                  data-ocid="deposit.gallery_qr.copy_button"
+                  onClick={() => copyToClipboard(qrResult, "QR Code data")}
+                  className="w-8 h-8 shrink-0 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
           <div className="space-y-2">

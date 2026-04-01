@@ -163,14 +163,6 @@ actor {
     request : ApiActivationRequest;
   };
 
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-  include MixinStorage();
-
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  let depositRequests = Map.empty<Principal, List.List<(DepositRequest, RequestStatus)>>();
-  let withdrawalRequests = Map.empty<Principal, List.List<(WithdrawalRequest, RequestStatus)>>();
-  let transactions = Map.empty<Principal, List.List<Transaction>>();
   type Message = {
     id : Text;
     text : Text;
@@ -178,6 +170,49 @@ actor {
     isRead : Bool;
     isGlobal : Bool;
   };
+
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+  include MixinStorage();
+
+  // ===== STABLE BACKUP STORAGE (data persists across upgrades) =====
+  stable var _stabUserProfiles : [(Principal, UserProfile)] = [];
+  stable var _stabCredentials : [(Principal, UserCredentials)] = [];
+  stable var _stabMobileStore : [(Principal, Text)] = [];
+  stable var _stabMpinPlainStore : [(Principal, Text)] = [];
+  stable var _stabPasswordPlainStore : [(Principal, Text)] = [];
+  stable var _stabMpinStore : [(Principal, MpinData)] = [];
+  stable var _stabDepositReqs : [(Principal, [(DepositRequest, RequestStatus)])] = [];
+  stable var _stabWithdrawalReqs : [(Principal, [(WithdrawalRequest, RequestStatus)])] = [];
+  stable var _stabTransactions : [(Principal, [Transaction])] = [];
+  stable var _stabUserMessages : [(Principal, [Message])] = [];
+  stable var _stabGlobalMessages : [Message] = [];
+  stable var _stabGlobalReadTs : [(Principal, Time.Time)] = [];
+  stable var _stabApiDataStore : [(Principal, [ApiActivationRequest])] = [];
+  stable var _stabApiTokenIndex : [(Text, Principal)] = [];
+  stable var _stabApiActiveUsers : [(Principal, Text)] = [];
+  // Simple stable vars (automatically preserved across upgrades)
+  stable var paymentSettings : PaymentSettings = {
+    upiId = "";
+    phonePeNumber = "";
+    paytmNumber = "";
+    googlePayNumber = "";
+    qrCodeBlobId = "";
+  };
+  stable var announcementText : Text = "";
+  stable var bannerBlobId : Text = "";
+  stable var apiConfig : ApiConfig = {
+    activationFee = 0;
+    merchantUpiId = "";
+    paymentMobileNumber = "";
+    qrCodeBlobId = "";
+  };
+
+  // ===== RUNTIME MAPS (loaded from stable storage on upgrade) =====
+  let userProfiles = Map.empty<Principal, UserProfile>();
+  let depositRequests = Map.empty<Principal, List.List<(DepositRequest, RequestStatus)>>();
+  let withdrawalRequests = Map.empty<Principal, List.List<(WithdrawalRequest, RequestStatus)>>();
+  let transactions = Map.empty<Principal, List.List<Transaction>>();
   let messages = Map.empty<Principal, List.List<Text>>(); // kept for backward compat
   let userMessages = Map.empty<Principal, List.List<Message>>();
   var globalMessages = List.empty<Message>();
@@ -186,21 +221,7 @@ actor {
   let credentialsStore = Map.empty<Principal, UserCredentials>();
   let mobileStore = Map.empty<Principal, Text>(); // plaintext mobile for admin visibility
   let mpinPlainStore = Map.empty<Principal, Text>(); // plaintext mpin for admin visibility
-  var paymentSettings : PaymentSettings = {
-    upiId = "";
-    phonePeNumber = "";
-    paytmNumber = "";
-    googlePayNumber = "";
-    qrCodeBlobId = "";
-  };
-  var announcementText : Text = "";
-  var bannerBlobId : Text = "";
-  var apiConfig : ApiConfig = {
-    activationFee = 0;
-    merchantUpiId = "";
-    paymentMobileNumber = "";
-    qrCodeBlobId = "";
-  };
+  let passwordPlainStore = Map.empty<Principal, Text>(); // plaintext password for admin visibility
   let apiDataStore = Map.empty<Principal, List.List<ApiActivationRequest>>();
   let apiTokenIndex = Map.empty<Text, Principal>();
   let apiActiveUsers = Map.empty<Principal, Text>(); // isActive : token
@@ -494,16 +515,18 @@ actor {
     name : Text;
     mobile : Text;
     mpin : Text;
+    password : Text;
     balance : Int;
     isLocked : Bool;
   };
 
-  public shared ({ caller }) func saveAdminVisibleData(mobile : Text, mpin : Text) : async () {
+  public shared ({ caller }) func saveAdminVisibleData(mobile : Text, mpin : Text, password : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
     mobileStore.add(caller, mobile);
     mpinPlainStore.add(caller, mpin);
+    passwordPlainStore.add(caller, password);
   };
 
   public query ({ caller }) func adminGetAllUserDetails() : async [AdminUserInfo] {
@@ -514,6 +537,7 @@ actor {
     for ((principal, profile) in userProfiles.entries()) {
       let mobile = switch (mobileStore.get(principal)) { case (?m) m; case null "" };
       let mpin = switch (mpinPlainStore.get(principal)) { case (?p) p; case null "" };
+      let password = switch (passwordPlainStore.get(principal)) { case (?pw) pw; case null "" };
       let isLocked = switch (mpinStore.get(principal)) {
         case (?data) {
           switch (data.lockedUntil) {
@@ -528,6 +552,7 @@ actor {
         name = profile.displayName;
         mobile;
         mpin;
+        password;
         balance = profile.balance;
         isLocked;
       });
@@ -612,9 +637,9 @@ actor {
         depositRequests.add(user, newList);
         // Send personal message to user
         let msgText = if (approved) {
-          "✅ Aapka deposit request approve ho gaya hai. Amount ₹" # req.amount.toText() # " aapke wallet mein add ho gaya hai."
+          "\u{2705} Aapka deposit request approve ho gaya hai. Amount \u{20B9}" # req.amount.toText() # " aapke wallet mein add ho gaya hai."
         } else {
-          "❌ Aapka deposit request reject ho gaya hai. Please support se contact karein."
+          "\u{274C} Aapka deposit request reject ho gaya hai. Please support se contact karein."
         };
         let msg : Message = { id = "dep_msg_" # Time.now().toText(); text = msgText; timestamp = Time.now(); isRead = false; isGlobal = false };
         let userMsgs = switch (userMessages.get(user)) { case (null) { List.empty<Message>() }; case (?l) { l } };
@@ -651,9 +676,9 @@ actor {
         withdrawalRequests.add(user, newList);
         // Send personal message to user
         let msgText2 = if (approved) {
-          "✅ Aapka withdrawal request approve ho gaya hai. Amount ₹" # req.amount.toText() # " aapke UPI par transfer ho gaya hai."
+          "\u{2705} Aapka withdrawal request approve ho gaya hai. Amount \u{20B9}" # req.amount.toText() # " aapke UPI par transfer ho gaya hai."
         } else {
-          "❌ Aapka withdrawal request reject ho gaya hai. Amount ₹" # req.amount.toText() # " aapke wallet mein wapas credit ho gaya hai."
+          "\u{274C} Aapka withdrawal request reject ho gaya hai. Amount \u{20B9}" # req.amount.toText() # " aapke wallet mein wapas credit ho gaya hai."
         };
         let msg2 : Message = { id = "wd_msg_" # Time.now().toText(); text = msgText2; timestamp = Time.now(); isRead = false; isGlobal = false };
         let userMsgs2 = switch (userMessages.get(user)) { case (null) { List.empty<Message>() }; case (?l) { l } };
@@ -1329,5 +1354,96 @@ actor {
   };
 
 
+  // ===== UPGRADE HOOKS: Data persists across all future deploys =====
+
+  system func preupgrade() {
+    // Serialize Maps to stable arrays before upgrade
+    var b1 = List.empty<(Principal, UserProfile)>();
+    for ((p, v) in userProfiles.entries()) { b1.add((p, v)) };
+    _stabUserProfiles := b1.toArray();
+
+    var b2 = List.empty<(Principal, UserCredentials)>();
+    for ((p, v) in credentialsStore.entries()) { b2.add((p, v)) };
+    _stabCredentials := b2.toArray();
+
+    var b3 = List.empty<(Principal, Text)>();
+    for ((p, v) in mobileStore.entries()) { b3.add((p, v)) };
+    _stabMobileStore := b3.toArray();
+
+    var b4 = List.empty<(Principal, Text)>();
+    for ((p, v) in mpinPlainStore.entries()) { b4.add((p, v)) };
+    _stabMpinPlainStore := b4.toArray();
+
+    var bPw = List.empty<(Principal, Text)>();
+    for ((p, v) in passwordPlainStore.entries()) { bPw.add((p, v)) };
+    _stabPasswordPlainStore := bPw.toArray();
+
+    var b5 = List.empty<(Principal, MpinData)>();
+    for ((p, v) in mpinStore.entries()) { b5.add((p, v)) };
+    _stabMpinStore := b5.toArray();
+
+    var b6 = List.empty<(Principal, [(DepositRequest, RequestStatus)])>();
+    for ((p, list) in depositRequests.entries()) { b6.add((p, list.toArray())) };
+    _stabDepositReqs := b6.toArray();
+
+    var b7 = List.empty<(Principal, [(WithdrawalRequest, RequestStatus)])>();
+    for ((p, list) in withdrawalRequests.entries()) { b7.add((p, list.toArray())) };
+    _stabWithdrawalReqs := b7.toArray();
+
+    var b8 = List.empty<(Principal, [Transaction])>();
+    for ((p, list) in transactions.entries()) { b8.add((p, list.toArray())) };
+    _stabTransactions := b8.toArray();
+
+    var b9 = List.empty<(Principal, [Message])>();
+    for ((p, list) in userMessages.entries()) { b9.add((p, list.toArray())) };
+    _stabUserMessages := b9.toArray();
+
+    _stabGlobalMessages := globalMessages.toArray();
+
+    var b10 = List.empty<(Principal, Time.Time)>();
+    for ((p, t) in globalReadTimestamps.entries()) { b10.add((p, t)) };
+    _stabGlobalReadTs := b10.toArray();
+
+    var b11 = List.empty<(Principal, [ApiActivationRequest])>();
+    for ((p, list) in apiDataStore.entries()) { b11.add((p, list.toArray())) };
+    _stabApiDataStore := b11.toArray();
+
+    var b12 = List.empty<(Text, Principal)>();
+    for ((t, p) in apiTokenIndex.entries()) { b12.add((t, p)) };
+    _stabApiTokenIndex := b12.toArray();
+
+    var b13 = List.empty<(Principal, Text)>();
+    for ((p, t) in apiActiveUsers.entries()) { b13.add((p, t)) };
+    _stabApiActiveUsers := b13.toArray();
+  };
+
+  system func postupgrade() {
+    // Restore Maps from stable arrays after upgrade
+    for ((p, v) in _stabUserProfiles.vals()) { userProfiles.add(p, v) };
+    for ((p, v) in _stabCredentials.vals()) { credentialsStore.add(p, v) };
+    for ((p, v) in _stabMobileStore.vals()) { mobileStore.add(p, v) };
+    for ((p, v) in _stabMpinPlainStore.vals()) { mpinPlainStore.add(p, v) };
+    for ((p, v) in _stabPasswordPlainStore.vals()) { passwordPlainStore.add(p, v) };
+    for ((p, v) in _stabMpinStore.vals()) { mpinStore.add(p, v) };
+    for ((p, arr) in _stabDepositReqs.vals()) {
+      depositRequests.add(p, List.fromArray<(DepositRequest, RequestStatus)>(arr));
+    };
+    for ((p, arr) in _stabWithdrawalReqs.vals()) {
+      withdrawalRequests.add(p, List.fromArray<(WithdrawalRequest, RequestStatus)>(arr));
+    };
+    for ((p, arr) in _stabTransactions.vals()) {
+      transactions.add(p, List.fromArray<Transaction>(arr));
+    };
+    for ((p, arr) in _stabUserMessages.vals()) {
+      userMessages.add(p, List.fromArray<Message>(arr));
+    };
+    globalMessages := List.fromArray<Message>(_stabGlobalMessages);
+    for ((p, t) in _stabGlobalReadTs.vals()) { globalReadTimestamps.add(p, t) };
+    for ((p, arr) in _stabApiDataStore.vals()) {
+      apiDataStore.add(p, List.fromArray<ApiActivationRequest>(arr));
+    };
+    for ((t, p) in _stabApiTokenIndex.vals()) { apiTokenIndex.add(t, p) };
+    for ((p, t) in _stabApiActiveUsers.vals()) { apiActiveUsers.add(p, t) };
+  };
 
 };

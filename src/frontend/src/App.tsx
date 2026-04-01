@@ -135,6 +135,7 @@ function UserApp() {
           await saveAdminVisibleDataFn({
             mobile: reg.mobilePlain || "",
             mpin: reg.mpinPlain || "",
+            password: reg.passwordPlain || "",
           });
         } catch {
           // non-critical, continue

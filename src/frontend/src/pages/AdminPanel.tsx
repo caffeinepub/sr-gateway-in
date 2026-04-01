@@ -475,6 +475,7 @@ function UsersTab() {
   const [adjustingIdx, setAdjustingIdx] = useState<number | null>(null);
   const [creditAmount, setCreditAmount] = useState("");
   const [showMpin, setShowMpin] = useState<Record<number, boolean>>({});
+  const [showPassword, setShowPassword] = useState<Record<number, boolean>>({});
 
   if (isLoading) return <LoadingSkeleton />;
   if (!users || users.length === 0)
@@ -606,6 +607,35 @@ function UsersTab() {
               className="text-xs text-primary underline"
             >
               {showMpin[idx] ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {/* Password */}
+          <div className="bg-muted/40 rounded-xl px-3 py-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Password</p>
+              <p className="font-mono text-sm text-foreground font-semibold">
+                {user.password ? (
+                  showPassword[idx] ? (
+                    user.password
+                  ) : (
+                    "••••••••"
+                  )
+                ) : (
+                  <span className="text-muted-foreground italic text-xs">
+                    Not set
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }))
+              }
+              className="text-xs text-primary underline"
+            >
+              {showPassword[idx] ? "Hide" : "Show"}
             </button>
           </div>
 

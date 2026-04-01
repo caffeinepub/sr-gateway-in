@@ -21,6 +21,7 @@ export interface RegisterData {
   name: string;
   mobilePlain: string;
   mpinPlain: string;
+  passwordPlain: string;
   mobileHash: string;
   passwordHash: string;
   mpinHash: string;
@@ -141,6 +142,7 @@ export default function RegisterScreen({
       onRegisterReady?.({
         name: name.trim(),
         mobilePlain: mobileClean,
+        passwordPlain: password,
         mpinPlain: p,
         mobileHash,
         passwordHash,

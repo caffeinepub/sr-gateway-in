@@ -143,6 +143,7 @@ export const AdminUserInfo = IDL.Record({
   'name' : IDL.Text,
   'mobile' : IDL.Text,
   'mpin' : IDL.Text,
+  'password' : IDL.Text,
   'balance' : IDL.Int,
   'isLocked' : IDL.Bool,
 });
@@ -264,7 +265,7 @@ export const idlService = IDL.Service({
   'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
   'markAllMessagesRead' : IDL.Func([], [], []),
   'sendGlobalMessage' : IDL.Func([IDL.Text], [], []),
-  'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'adminGetAllUserDetails' : IDL.Func([], [IDL.Vec(AdminUserInfo)], ['query']),
   'sendPersonalMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
   'joinChatQueue' : IDL.Func([IDL.Text], [ChatQueueStatus], []),
@@ -416,7 +417,8 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'mobile' : IDL.Text,
     'mpin' : IDL.Text,
-    'balance' : IDL.Int,
+    'password' : IDL.Text,
+  'balance' : IDL.Int,
     'isLocked' : IDL.Bool,
   });
   const ActiveChatInfo = IDL.Record({
@@ -536,7 +538,7 @@ export const idlFactory = ({ IDL }) => {
     'getUnreadMessageCount' : IDL.Func([], [IDL.Nat], ['query']),
     'markAllMessagesRead' : IDL.Func([], [], []),
     'sendGlobalMessage' : IDL.Func([IDL.Text], [], []),
-    'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'saveAdminVisibleData' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'adminGetAllUserDetails' : IDL.Func([], [IDL.Vec(AdminUserInfo)], ['query']),
     'sendPersonalMessage' : IDL.Func([IDL.Principal, IDL.Text], [], []),
     'joinChatQueue' : IDL.Func([IDL.Text], [ChatQueueStatus], []),

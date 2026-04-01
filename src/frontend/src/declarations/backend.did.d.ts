@@ -105,6 +105,7 @@ export interface AdminUserInfo {
   name: string;
   mobile: string;
   mpin: string;
+  password: string;
   balance: bigint;
   isLocked: boolean;
 }
@@ -179,7 +180,7 @@ export interface _SERVICE {
   'getUnreadMessageCount' : ActorMethod<[], bigint>,
   'markAllMessagesRead' : ActorMethod<[], undefined>,
   'sendGlobalMessage' : ActorMethod<[string], undefined>,
-  'saveAdminVisibleData' : ActorMethod<[string, string], undefined>,
+  'saveAdminVisibleData' : ActorMethod<[string, string, string], undefined>,
   'adminGetAllUserDetails' : ActorMethod<[], Array<AdminUserInfo>>,
   'sendPersonalMessage' : ActorMethod<[Principal, string], undefined>,
   'joinChatQueue' : ActorMethod<[string], {position: bigint, isActive: boolean, queueLength: bigint, mobileNumber: string}>,
