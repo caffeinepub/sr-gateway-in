@@ -1295,5 +1295,17 @@ export function createActor(canisterId: string, _uploadFile: (file: ExternalBlob
         canisterId: canisterId,
         ...options.actorOptions
     });
-    return new Backend(actor, _uploadFile, _downloadFile, options.processError);
+    const backend = new Backend(actor, _uploadFile, _downloadFile, options.processError);
+    // Proxy: fall through to raw ICP actor for methods not implemented in Backend class
+    // This permanently fixes all (actor as any).functionName() calls for functions like
+    // joinChatQueue, adminGetAllUserDetails, sendChatMessage, etc.
+    return new Proxy(backend, {
+        get(target: Backend, prop: string | symbol, receiver: unknown) {
+            const val = Reflect.get(target, prop, receiver);
+            if (val !== undefined) return val;
+            const rawVal = (actor as Record<string | symbol, unknown>)[prop];
+            if (typeof rawVal === 'function') return (rawVal as (...args: unknown[]) => unknown).bind(actor);
+            return rawVal;
+        }
+    }) as Backend;
 }
