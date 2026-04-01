@@ -11,9 +11,12 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Gift,
   Info,
+  Loader2,
   MessageCircle,
   Send,
+  Sparkles,
   Upload,
   Users,
   X,
@@ -29,8 +32,11 @@ import { useBlobStorage } from "../hooks/useBlobStorage";
 import {
   type AdminUserInfo,
   useAdjustBalance,
+  useAdminAllGiftCodes,
   useAdminAllUserDetails,
+  useAdminCreateGiftCode,
   useAdminSendChatMessage,
+  useAdminToggleGiftCode,
   useAllUsers,
   useApiConfig,
   useApproveApiActivation,
@@ -131,6 +137,12 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
       icon: "💬",
       label: "Live Chat",
       desc: "Users ke saath live chat karo",
+    },
+    {
+      id: "giftcodes",
+      icon: "🎁",
+      label: "Gift Codes",
+      desc: "Gift codes create aur manage karo",
     },
   ];
 
@@ -250,6 +262,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
             )}
             {activeSection === "globalmessage" && <GlobalMessageTab />}
             {activeSection === "livechat" && <AdminLiveChatTab />}
+            {activeSection === "giftcodes" && <AdminGiftCodesTab />}
           </div>
         )}
       </div>
@@ -1577,6 +1590,246 @@ function AdminLiveChatTab() {
                     Wait kar raha hai...
                   </p>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminGiftCodesTab() {
+  const { data: giftCodes, isLoading } = useAdminAllGiftCodes();
+  const createMutation = useAdminCreateGiftCode();
+  const toggleMutation = useAdminToggleGiftCode();
+
+  const [codeSuffix, setCodeSuffix] = useState("");
+  const [amount, setAmount] = useState("");
+  const [maxClaims, setMaxClaims] = useState("10");
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const suffix = codeSuffix
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    const amt = Number.parseFloat(amount);
+    const claims = Number.parseInt(maxClaims, 10);
+    if (!suffix) {
+      toast.error("Code suffix daalo");
+      return;
+    }
+    if (!amt || amt <= 0) {
+      toast.error("Valid amount daalo");
+      return;
+    }
+    if (!claims || claims < 1 || claims > 100) {
+      toast.error("Max claims 1-100 honi chahiye");
+      return;
+    }
+    try {
+      const result = await createMutation.mutateAsync({
+        codeSuffix: suffix,
+        amount: BigInt(Math.round(amt * 100)),
+        maxClaims: BigInt(claims),
+      });
+      if (result && typeof result === "object" && "ok" in result) {
+        toast.success(`Gift code created: ${(result as any).ok}`);
+        setCodeSuffix("");
+        setAmount("");
+        setMaxClaims("10");
+      } else if (result && typeof result === "object" && "err" in result) {
+        toast.error(String((result as any).err));
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Create failed");
+    }
+  };
+
+  const handleToggle = async (code: string, currentlyActive: boolean) => {
+    try {
+      await toggleMutation.mutateAsync({ code, isActive: !currentlyActive });
+      toast.success(`Code ${!currentlyActive ? "activated" : "deactivated"}!`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Toggle failed");
+    }
+  };
+
+  if (isLoading) return <LoadingSkeleton />;
+
+  return (
+    <div className="space-y-5">
+      {/* Create Gift Code Form */}
+      <div
+        className="bg-card border border-violet-500/30 rounded-2xl p-4 space-y-4"
+        style={{ boxShadow: "0 0 16px rgba(139,92,246,0.15)" }}
+        data-ocid="admin.giftcodes.create.card"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-violet-400" />
+          </div>
+          <p className="font-bold text-foreground text-sm">
+            New Gift Code Banao
+          </p>
+        </div>
+        <form onSubmit={handleCreate} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-foreground">
+              Code Suffix
+            </Label>
+            <div className="flex items-center gap-0">
+              <span className="px-3 py-2 bg-violet-500/20 border border-violet-500/30 border-r-0 rounded-l-xl text-violet-300 font-mono text-sm font-bold">
+                SRIN_
+              </span>
+              <Input
+                data-ocid="admin.giftcodes.create.suffix_input"
+                placeholder="SPECIAL50"
+                value={codeSuffix}
+                onChange={(e) =>
+                  setCodeSuffix(
+                    e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                  )
+                }
+                maxLength={20}
+                className="bg-muted border-violet-500/30 text-foreground font-mono rounded-l-none"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                Amount (₹)
+              </Label>
+              <Input
+                data-ocid="admin.giftcodes.create.amount_input"
+                type="number"
+                placeholder="50"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                min="1"
+                className="bg-muted border-violet-500/30 text-foreground"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                Max Claims
+              </Label>
+              <Input
+                data-ocid="admin.giftcodes.create.maxclaims_input"
+                type="number"
+                placeholder="10"
+                value={maxClaims}
+                onChange={(e) => setMaxClaims(e.target.value)}
+                min="1"
+                max="100"
+                className="bg-muted border-violet-500/30 text-foreground"
+              />
+            </div>
+          </div>
+          <Button
+            data-ocid="admin.giftcodes.create.submit_button"
+            type="submit"
+            disabled={createMutation.isPending}
+            className="w-full h-10 font-bold rounded-xl text-white"
+            style={{
+              background: "linear-gradient(135deg, #7c3aed, #8b5cf6, #a78bfa)",
+              boxShadow: "0 0 16px rgba(139,92,246,0.4)",
+            }}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Gift className="w-4 h-4 mr-2" />
+            )}
+            {createMutation.isPending ? "Creating..." : "Gift Code Create Karo"}
+          </Button>
+        </form>
+      </div>
+
+      {/* All Gift Codes List */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Gift className="w-4 h-4 text-amber-400" />
+          <p className="text-sm font-bold text-foreground">
+            All Gift Codes ({(giftCodes as any[] | undefined)?.length ?? 0})
+          </p>
+        </div>
+        {!giftCodes || (giftCodes as any[]).length === 0 ? (
+          <div
+            className="bg-card border border-border rounded-2xl p-8 text-center"
+            data-ocid="admin.giftcodes.empty_state"
+          >
+            <Gift className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">
+              Abhi koi gift code nahi hai.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(giftCodes as [string, any][]).map(([code, gc], idx) => (
+              <div
+                key={code}
+                data-ocid={`admin.giftcodes.item.${idx + 1}`}
+                className="bg-card border border-border rounded-2xl p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono font-bold text-foreground text-sm truncate">
+                      {code}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                        {formatRupees(gc.amount)}
+                      </span>
+                      <span className="text-xs bg-primary/15 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-semibold">
+                        Claimed: {String(gc.claimedCount)}/
+                        {String(gc.maxClaims)}
+                      </span>
+                      {gc.isAdminCreated ? (
+                        <span className="text-xs bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">
+                          Admin
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-blue-500/15 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-semibold">
+                          User
+                        </span>
+                      )}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                          gc.isActive
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+                            : "bg-rose-500/15 text-rose-400 border-rose-500/20"
+                        }`}
+                      >
+                        {gc.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  data-ocid={`admin.giftcodes.toggle.button.${idx + 1}`}
+                  size="sm"
+                  onClick={() => handleToggle(code, gc.isActive)}
+                  disabled={toggleMutation.isPending}
+                  variant="outline"
+                  className={`w-full rounded-xl text-xs font-semibold ${
+                    gc.isActive
+                      ? "border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                      : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                  }`}
+                >
+                  {gc.isActive ? (
+                    <>
+                      <X className="w-3.5 h-3.5 mr-1.5" /> Deactivate
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1.5" /> Activate
+                    </>
+                  )}
+                </Button>
               </div>
             ))}
           </div>

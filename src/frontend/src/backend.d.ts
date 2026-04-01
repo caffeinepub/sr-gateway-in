@@ -149,6 +149,21 @@ export interface ChatQueueEntry {
     mobileNumber: string;
     joinedAt: bigint;
 }
+export interface GiftCode {
+    code: string;
+    amount: bigint;
+    maxClaims: bigint;
+    claimedCount: bigint;
+    createdBy: Principal;
+    isAdminCreated: boolean;
+    isActive: boolean;
+    timestamp: bigint;
+}
+export interface GiftCodeClaim {
+    code: string;
+    amount: bigint;
+    timestamp: bigint;
+}
 export interface backendInterface {
     adjustBalance(user: Principal, newBalance: bigint): Promise<void>;
     approveApiActivation(user: Principal, approved: boolean): Promise<void>;
@@ -205,4 +220,12 @@ export interface backendInterface {
     getChatQueueList(): Promise<Array<ChatQueueEntry>>;
     adminSendChatMessage(text: string): Promise<void>;
     endCurrentChat(): Promise<void>;
+    createGiftCode(codeSuffix: string, amount: bigint, maxClaims: bigint): Promise<{__kind__: "ok"; ok: string} | {__kind__: "err"; err: string}>;
+    adminCreateGiftCode(codeSuffix: string, amount: bigint, maxClaims: bigint): Promise<{__kind__: "ok"; ok: string} | {__kind__: "err"; err: string}>;
+    claimGiftCode(fullCode: string): Promise<{__kind__: "ok"; ok: bigint} | {__kind__: "err"; err: string}>;
+    getMyGiftCodes(): Promise<Array<GiftCode>>;
+    getMyGiftCodeClaims(): Promise<Array<GiftCodeClaim>>;
+    adminGetAllGiftCodes(): Promise<Array<[string, GiftCode]>>;
+    adminToggleGiftCode(code: string, isActive: boolean): Promise<{__kind__: "ok"; ok: null} | {__kind__: "err"; err: string}>;
 }
+// This file is auto-generated. Gift code types are appended.

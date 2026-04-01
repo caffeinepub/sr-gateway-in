@@ -171,6 +171,24 @@ actor {
     isGlobal : Bool;
   };
 
+
+  type GiftCode = {
+    code : Text;
+    amount : Int;
+    maxClaims : Nat;
+    claimedCount : Nat;
+    createdBy : Principal;
+    isAdminCreated : Bool;
+    isActive : Bool;
+    timestamp : Time.Time;
+  };
+
+  type GiftCodeClaim = {
+    code : Text;
+    amount : Int;
+    timestamp : Time.Time;
+  };
+
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
@@ -191,6 +209,9 @@ actor {
   stable var _stabApiDataStore : [(Principal, [ApiActivationRequest])] = [];
   stable var _stabApiTokenIndex : [(Text, Principal)] = [];
   stable var _stabApiActiveUsers : [(Principal, Text)] = [];
+  stable var _stabGiftCodes : [(Text, GiftCode)] = [];
+  stable var _stabGiftCodeClaims : [(Principal, [GiftCodeClaim])] = [];
+
   // Simple stable vars (automatically preserved across upgrades)
   stable var paymentSettings : PaymentSettings = {
     upiId = "";
@@ -225,6 +246,9 @@ actor {
   let apiDataStore = Map.empty<Principal, List.List<ApiActivationRequest>>();
   let apiTokenIndex = Map.empty<Text, Principal>();
   let apiActiveUsers = Map.empty<Principal, Text>(); // isActive : token
+  let giftCodes = Map.empty<Text, GiftCode>();
+  let giftCodeClaims = Map.empty<Principal, List.List<GiftCodeClaim>>();
+
 
   // credentials functions
   // Check if a mobile hash is already registered by any user
@@ -1354,6 +1378,141 @@ actor {
   };
 
 
+
+  // ===== GIFT CODE SYSTEM =====
+
+  public shared ({ caller }) func createGiftCode(codeSuffix : Text, amount : Int, maxClaims : Nat) : async { #ok : Text; #err : Text } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      return #err("Unauthorized");
+    };
+    if (amount <= 0) { return #err("Amount must be positive") };
+    if (maxClaims == 0) { return #err("Max claims must be at least 1") };
+    if (codeSuffix.size() == 0) { return #err("Code suffix cannot be empty") };
+    let fullCode = "SRIN_" # codeSuffix;
+    if (giftCodes.get(fullCode) != null) { return #err("Code already exists") };
+    let profile = switch (userProfiles.get(caller)) {
+      case (null) { return #err("Profile not found") };
+      case (?p) { p };
+    };
+    if (profile.balance < amount) { return #err("Insufficient balance") };
+    // Deduct from wallet
+    userProfiles.add(caller, { profile with balance = profile.balance - amount });
+    let code : GiftCode = {
+      code = fullCode;
+      amount;
+      maxClaims;
+      claimedCount = 0;
+      createdBy = caller;
+      isAdminCreated = false;
+      isActive = true;
+      timestamp = Time.now();
+    };
+    giftCodes.add(fullCode, code);
+    #ok(fullCode)
+  };
+
+  public shared ({ caller }) func adminCreateGiftCode(codeSuffix : Text, amount : Int, maxClaims : Nat) : async { #ok : Text; #err : Text } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      return #err("Unauthorized: Admin only");
+    };
+    if (amount <= 0) { return #err("Amount must be positive") };
+    if (maxClaims == 0) { return #err("Max claims must be at least 1") };
+    let fullCode = "SRIN_" # codeSuffix;
+    if (giftCodes.get(fullCode) != null) { return #err("Code already exists") };
+    let code : GiftCode = {
+      code = fullCode;
+      amount;
+      maxClaims;
+      claimedCount = 0;
+      createdBy = caller;
+      isAdminCreated = true;
+      isActive = true;
+      timestamp = Time.now();
+    };
+    giftCodes.add(fullCode, code);
+    #ok(fullCode)
+  };
+
+  public shared ({ caller }) func claimGiftCode(fullCode : Text) : async { #ok : Int; #err : Text } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      return #err("Unauthorized");
+    };
+    let gc = switch (giftCodes.get(fullCode)) {
+      case (null) { return #err("Invalid gift code") };
+      case (?g) { g };
+    };
+    if (not gc.isActive) { return #err("Gift code is inactive") };
+    if (gc.claimedCount >= gc.maxClaims) { return #err("Gift code fully claimed") };
+    // Check if caller already claimed
+    let myClaims = switch (giftCodeClaims.get(caller)) {
+      case (null) { List.empty<GiftCodeClaim>() };
+      case (?c) { c };
+    };
+    for (claim in myClaims.values()) {
+      if (claim.code == fullCode) { return #err("Already claimed this code") };
+    };
+    // Prevent creator from claiming own code
+    if (gc.createdBy == caller and not gc.isAdminCreated) {
+      return #err("Cannot claim your own gift code");
+    };
+    // Credit wallet
+    let profile = switch (userProfiles.get(caller)) {
+      case (null) { return #err("Profile not found") };
+      case (?p) { p };
+    };
+    userProfiles.add(caller, { profile with balance = profile.balance + gc.amount });
+    // Record claim
+    let newClaim : GiftCodeClaim = { code = fullCode; amount = gc.amount; timestamp = Time.now() };
+    myClaims.add(newClaim);
+    giftCodeClaims.add(caller, myClaims);
+    // Update claimedCount
+    giftCodes.add(fullCode, { gc with claimedCount = gc.claimedCount + 1 });
+    #ok(gc.amount)
+  };
+
+  public query ({ caller }) func getMyGiftCodes() : async [GiftCode] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    var result = List.empty<GiftCode>();
+    for ((_, gc) in giftCodes.entries()) {
+      if (gc.createdBy == caller) { result.add(gc) };
+    };
+    result.toArray()
+  };
+
+  public query ({ caller }) func getMyGiftCodeClaims() : async [GiftCodeClaim] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (giftCodeClaims.get(caller)) {
+      case (null) { [] };
+      case (?list) { list.toArray() };
+    }
+  };
+
+  public query ({ caller }) func adminGetAllGiftCodes() : async [(Text, GiftCode)] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+    var result = List.empty<(Text, GiftCode)>();
+    for ((k, v) in giftCodes.entries()) { result.add((k, v)) };
+    result.toArray()
+  };
+
+  public shared ({ caller }) func adminToggleGiftCode(code : Text, isActive : Bool) : async { #ok; #err : Text } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      return #err("Unauthorized: Admin only");
+    };
+    switch (giftCodes.get(code)) {
+      case (null) { #err("Code not found") };
+      case (?gc) {
+        giftCodes.add(code, { gc with isActive });
+        #ok
+      };
+    }
+  };
+
   // ===== UPGRADE HOOKS: Data persists across all future deploys =====
 
   system func preupgrade() {
@@ -1415,6 +1574,14 @@ actor {
     var b13 = List.empty<(Principal, Text)>();
     for ((p, t) in apiActiveUsers.entries()) { b13.add((p, t)) };
     _stabApiActiveUsers := b13.toArray();
+
+    var bgc = List.empty<(Text, GiftCode)>();
+    for ((k, v) in giftCodes.entries()) { bgc.add((k, v)) };
+    _stabGiftCodes := bgc.toArray();
+
+    var bgcc = List.empty<(Principal, [GiftCodeClaim])>();
+    for ((p, list) in giftCodeClaims.entries()) { bgcc.add((p, list.toArray())) };
+    _stabGiftCodeClaims := bgcc.toArray();
   };
 
   system func postupgrade() {
@@ -1444,6 +1611,10 @@ actor {
     };
     for ((t, p) in _stabApiTokenIndex.vals()) { apiTokenIndex.add(t, p) };
     for ((p, t) in _stabApiActiveUsers.vals()) { apiActiveUsers.add(p, t) };
+    for ((k, v) in _stabGiftCodes.vals()) { giftCodes.add(k, v) };
+    for ((p, arr) in _stabGiftCodeClaims.vals()) {
+      giftCodeClaims.add(p, List.fromArray<GiftCodeClaim>(arr));
+    };
   };
 
 };

@@ -1,14 +1,28 @@
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   ArrowUp,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Copy,
   Droplets,
   Flame,
+  Gift,
+  Loader2,
   Megaphone,
   MessageCircle,
   Plus,
   Shield,
   Smartphone,
+  Sparkles,
   Tv2,
   Zap,
 } from "lucide-react";
@@ -20,8 +34,14 @@ import Header from "../components/Header";
 import MessagePanel from "../components/MessagePanel";
 import SideMenu from "../components/SideMenu";
 import { useBlobStorage } from "../hooks/useBlobStorage";
-import { useBalance, usePaymentSettings } from "../hooks/useQueries";
-import { formatRupees } from "../utils/format";
+import {
+  useBalance,
+  useClaimGiftCode,
+  useCreateGiftCode,
+  useMyGiftCodeClaims,
+  usePaymentSettings,
+} from "../hooks/useQueries";
+import { formatDate, formatRupees } from "../utils/format";
 
 const bannerSlides = [
   {
@@ -67,9 +87,27 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [bannerIndex, setBannerIndex] = useState(0);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [claimHistoryOpen, setClaimHistoryOpen] = useState(false);
+
+  // Claim form state
+  const [claimCode, setClaimCode] = useState("");
+
+  // Create form state
+  const [createSuffix, setCreateSuffix] = useState("");
+  const [createAmount, setCreateAmount] = useState("");
+  const [createMaxClaims, setCreateMaxClaims] = useState("5");
+  const [createdCodeResult, setCreatedCodeResult] = useState<string | null>(
+    null,
+  );
+
   const { data: balance } = useBalance();
   const { data: settings } = usePaymentSettings();
   const { getBlobUrl } = useBlobStorage();
+  const { data: claimHistory } = useMyGiftCodeClaims();
+  const claimMutation = useClaimGiftCode();
+  const createMutation = useCreateGiftCode();
 
   // Parse admin banners (pipe-separated blob IDs)
   const adminBannerIds = (settings?.bannerBlobId || "")
@@ -87,6 +125,72 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
   const slide = bannerSlides[bannerIndex % bannerSlides.length];
 
+  const handleClaim = async () => {
+    const code = claimCode.trim().toUpperCase();
+    if (!code) {
+      toast.error("Gift code daalo");
+      return;
+    }
+    try {
+      const result = await claimMutation.mutateAsync(code);
+      if (result && typeof result === "object" && "ok" in result) {
+        const amt = formatRupees(result.ok as bigint);
+        toast.success(`✅ ${amt} credited! Gift code successfully claimed.`);
+        setClaimCode("");
+        setClaimDialogOpen(false);
+      } else if (result && typeof result === "object" && "err" in result) {
+        toast.error(String((result as any).err));
+      } else {
+        toast.success("Gift code claimed successfully!");
+        setClaimCode("");
+        setClaimDialogOpen(false);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Claim failed");
+    }
+  };
+
+  const handleCreate = async () => {
+    const suffix = createSuffix
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    const amount = Number.parseFloat(createAmount);
+    const maxClaims = Number.parseInt(createMaxClaims, 10);
+    if (!suffix || suffix.length < 1 || suffix.length > 20) {
+      toast.error("Code suffix 1-20 characters ka hona chahiye");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      toast.error("Valid amount daalo");
+      return;
+    }
+    if (!maxClaims || maxClaims < 1 || maxClaims > 20) {
+      toast.error("Max claims 1-20 ke beech honi chahiye");
+      return;
+    }
+    try {
+      const result = await createMutation.mutateAsync({
+        codeSuffix: suffix,
+        amount: BigInt(Math.round(amount * 100)),
+        maxClaims: BigInt(maxClaims),
+      });
+      if (result && typeof result === "object" && "ok" in result) {
+        setCreatedCodeResult(String((result as any).ok));
+        setCreateSuffix("");
+        setCreateAmount("");
+        setCreateMaxClaims("5");
+      } else if (result && typeof result === "object" && "err" in result) {
+        toast.error(String((result as any).err));
+      } else {
+        toast.success("Gift code created!");
+        setCreateDialogOpen(false);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Create failed");
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-full animate-slide-in">
       <Header
@@ -102,6 +206,198 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       />
 
       <MessagePanel open={messageOpen} onClose={() => setMessageOpen(false)} />
+
+      {/* Claim Gift Code Dialog */}
+      <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
+        <DialogContent
+          className="bg-card border border-amber-500/30 rounded-2xl max-w-sm mx-auto"
+          data-ocid="giftcode.claim.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-400">
+              <Gift className="w-5 h-5" />
+              Gift Code Claim Karo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Gift code enter karo — instant wallet credit hoga!
+            </p>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground">
+                Gift Code
+              </Label>
+              <Input
+                data-ocid="giftcode.claim.input"
+                placeholder="SRIN_HAPPY100"
+                value={claimCode}
+                onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+                className="bg-muted border-amber-500/30 text-foreground font-mono"
+              />
+            </div>
+            <Button
+              data-ocid="giftcode.claim.submit_button"
+              onClick={handleClaim}
+              disabled={claimMutation.isPending}
+              className="w-full h-11 font-bold rounded-xl text-white"
+              style={{
+                background:
+                  "linear-gradient(135deg, #d97706, #f59e0b, #fbbf24)",
+                boxShadow: "0 0 20px rgba(245,158,11,0.5)",
+              }}
+            >
+              {claimMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Gift className="w-4 h-4 mr-2" />
+              )}
+              {claimMutation.isPending ? "Claiming..." : "Claim Karo"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Gift Code Dialog */}
+      <Dialog
+        open={createDialogOpen}
+        onOpenChange={(v) => {
+          setCreateDialogOpen(v);
+          if (!v) setCreatedCodeResult(null);
+        }}
+      >
+        <DialogContent
+          className="bg-card border border-violet-500/30 rounded-2xl max-w-sm mx-auto"
+          data-ocid="giftcode.create.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-violet-400">
+              <Sparkles className="w-5 h-5" />
+              Gift Code Banao
+            </DialogTitle>
+          </DialogHeader>
+          {createdCodeResult ? (
+            <div className="space-y-4">
+              <div className="text-center py-2">
+                <div className="text-4xl mb-3">🎁</div>
+                <p className="font-bold text-foreground text-sm">
+                  Gift Code Ready!
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Doston ko share karo
+                </p>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-xl border border-violet-500/30">
+                <span className="font-mono font-bold text-violet-300 text-sm flex-1">
+                  {createdCodeResult}
+                </span>
+                <button
+                  type="button"
+                  data-ocid="giftcode.created.copy_button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdCodeResult);
+                    toast.success("Code copied!");
+                  }}
+                  className="text-violet-400 hover:text-violet-300"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+              <Button
+                data-ocid="giftcode.create.close_button"
+                onClick={() => {
+                  setCreateDialogOpen(false);
+                  setCreatedCodeResult(null);
+                }}
+                className="w-full rounded-xl"
+                variant="outline"
+              >
+                Done
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Apna gift code banao — doston ko bhejo, woh claim karke paisa
+                paayenge!
+              </p>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-foreground">
+                  Code Suffix
+                </Label>
+                <div className="flex items-center gap-0">
+                  <span className="px-3 py-2 bg-violet-500/20 border border-violet-500/30 border-r-0 rounded-l-xl text-violet-300 font-mono text-sm font-bold">
+                    SRIN_
+                  </span>
+                  <Input
+                    data-ocid="giftcode.create.suffix_input"
+                    placeholder="HAPPY100"
+                    value={createSuffix}
+                    onChange={(e) =>
+                      setCreateSuffix(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                      )
+                    }
+                    maxLength={20}
+                    className="bg-muted border-violet-500/30 text-foreground font-mono rounded-l-none"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Full code: SRIN_{createSuffix || "HAPPY100"}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Amount (₹)
+                  </Label>
+                  <Input
+                    data-ocid="giftcode.create.amount_input"
+                    type="number"
+                    placeholder="100"
+                    value={createAmount}
+                    onChange={(e) => setCreateAmount(e.target.value)}
+                    min="1"
+                    className="bg-muted border-violet-500/30 text-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Max Claims (1-20)
+                  </Label>
+                  <Input
+                    data-ocid="giftcode.create.maxclaims_input"
+                    type="number"
+                    placeholder="5"
+                    value={createMaxClaims}
+                    onChange={(e) => setCreateMaxClaims(e.target.value)}
+                    min="1"
+                    max="20"
+                    className="bg-muted border-violet-500/30 text-foreground"
+                  />
+                </div>
+              </div>
+              <Button
+                data-ocid="giftcode.create.submit_button"
+                onClick={handleCreate}
+                disabled={createMutation.isPending}
+                className="w-full h-11 font-bold rounded-xl text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #7c3aed, #8b5cf6, #a78bfa)",
+                  boxShadow: "0 0 20px rgba(139,92,246,0.5)",
+                }}
+              >
+                {createMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
+                {createMutation.isPending ? "Creating..." : "Code Banao"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="flex-1 px-4 py-4 space-y-4">
         {/* Announcement Bar */}
@@ -312,6 +608,165 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Gift Code Section */}
+        <div className="space-y-3" data-ocid="giftcode.section">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Gift Codes
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Claim Gift Code Button */}
+            <button
+              type="button"
+              data-ocid="giftcode.claim.open_modal_button"
+              onClick={() => setClaimDialogOpen(true)}
+              className="relative flex flex-col items-center gap-2.5 p-4 rounded-2xl overflow-hidden transition-all active:scale-95"
+              style={{
+                background:
+                  "linear-gradient(135deg, #78350f 0%, #92400e 50%, #b45309 100%)",
+                boxShadow:
+                  "0 0 24px rgba(245,158,11,0.45), 0 4px 12px rgba(0,0,0,0.3)",
+                border: "1px solid rgba(245,158,11,0.4)",
+              }}
+            >
+              <div
+                className="absolute inset-0 opacity-20"
+                style={{
+                  background:
+                    "radial-gradient(circle at 30% 30%, rgba(251,191,36,0.6), transparent 60%)",
+                }}
+              />
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center relative z-10"
+                style={{
+                  background: "rgba(245,158,11,0.25)",
+                  border: "1px solid rgba(245,158,11,0.5)",
+                  boxShadow: "0 0 12px rgba(245,158,11,0.4)",
+                }}
+              >
+                <Gift className="w-6 h-6 text-amber-300" />
+              </div>
+              <div className="text-center relative z-10">
+                <p className="font-bold text-amber-100 text-sm">
+                  Claim Gift Code
+                </p>
+                <p className="text-xs text-amber-300/80 mt-0.5 leading-tight">
+                  Code enter karo
+                </p>
+                <p className="text-xs text-amber-300/80 leading-tight">
+                  instant credit!
+                </p>
+              </div>
+            </button>
+
+            {/* Create Gift Code Button */}
+            <button
+              type="button"
+              data-ocid="giftcode.create.open_modal_button"
+              onClick={() => setCreateDialogOpen(true)}
+              className="relative flex flex-col items-center gap-2.5 p-4 rounded-2xl overflow-hidden transition-all active:scale-95"
+              style={{
+                background:
+                  "linear-gradient(135deg, #3b0764 0%, #4c1d95 50%, #5b21b6 100%)",
+                boxShadow:
+                  "0 0 24px rgba(139,92,246,0.45), 0 4px 12px rgba(0,0,0,0.3)",
+                border: "1px solid rgba(139,92,246,0.4)",
+              }}
+            >
+              <div
+                className="absolute inset-0 opacity-20"
+                style={{
+                  background:
+                    "radial-gradient(circle at 70% 30%, rgba(167,139,250,0.6), transparent 60%)",
+                }}
+              />
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center relative z-10"
+                style={{
+                  background: "rgba(139,92,246,0.25)",
+                  border: "1px solid rgba(139,92,246,0.5)",
+                  boxShadow: "0 0 12px rgba(139,92,246,0.4)",
+                }}
+              >
+                <Sparkles className="w-6 h-6 text-violet-300" />
+              </div>
+              <div className="text-center relative z-10">
+                <p className="font-bold text-violet-100 text-sm">
+                  Create Gift Code
+                </p>
+                <p className="text-xs text-violet-300/80 mt-0.5 leading-tight">
+                  Apna code banao
+                </p>
+                <p className="text-xs text-violet-300/80 leading-tight">
+                  doston ko bhejo!
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* Claim History Collapsible */}
+          {claimHistory && claimHistory.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <button
+                type="button"
+                data-ocid="giftcode.history.toggle"
+                onClick={() => setClaimHistoryOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-semibold text-foreground">
+                    Meri Claim History
+                  </span>
+                  <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">
+                    {claimHistory.length}
+                  </span>
+                </div>
+                {claimHistoryOpen ? (
+                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
+              <AnimatePresence>
+                {claimHistoryOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="divide-y divide-border border-t border-border">
+                      {claimHistory.map((claim: any, idx: number) => (
+                        <div
+                          key={String(claim.timestamp)}
+                          data-ocid={`giftcode.history.item.${idx + 1}`}
+                          className="flex items-center gap-3 px-4 py-3"
+                        >
+                          <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                            <Gift className="w-4 h-4 text-amber-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-mono text-xs font-bold text-foreground truncate">
+                              {claim.code}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {formatDate(claim.timestamp)}
+                            </p>
+                          </div>
+                          <span className="text-sm font-bold text-emerald-400 shrink-0">
+                            +{formatRupees(claim.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
         {/* Live Chat Support */}

@@ -686,3 +686,107 @@ export function useSaveAdminVisibleData() {
     },
   });
 }
+
+// ─── Gift Code Hooks ───────────────────────────────────────────────────────────
+
+export function useMyGiftCodes() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["myGiftCodes"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getMyGiftCodes() as Promise<any[]>;
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useMyGiftCodeClaims() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["myGiftCodeClaims"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getMyGiftCodeClaims() as Promise<any[]>;
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useCreateGiftCode() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      codeSuffix,
+      amount,
+      maxClaims,
+    }: { codeSuffix: string; amount: bigint; maxClaims: bigint }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).createGiftCode(codeSuffix, amount, maxClaims);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["myGiftCodes"] });
+      qc.invalidateQueries({ queryKey: ["balance"] });
+    },
+  });
+}
+
+export function useClaimGiftCode() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fullCode: string) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).claimGiftCode(fullCode);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["balance"] });
+      qc.invalidateQueries({ queryKey: ["myGiftCodeClaims"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}
+
+export function useAdminAllGiftCodes() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["adminAllGiftCodes"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).adminGetAllGiftCodes() as Promise<[string, any][]>;
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAdminCreateGiftCode() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      codeSuffix,
+      amount,
+      maxClaims,
+    }: { codeSuffix: string; amount: bigint; maxClaims: bigint }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).adminCreateGiftCode(codeSuffix, amount, maxClaims);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["adminAllGiftCodes"] }),
+  });
+}
+
+export function useAdminToggleGiftCode() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      code,
+      isActive,
+    }: { code: string; isActive: boolean }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).adminToggleGiftCode(code, isActive);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["adminAllGiftCodes"] }),
+  });
+}
