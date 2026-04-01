@@ -116,7 +116,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const hasAdminBanners = adminBannerIds.length > 0;
 
   // Auto-advance banner every 2 seconds
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
   useEffect(() => {
     const total = hasAdminBanners ? adminBannerIds.length : bannerSlides.length;
     const t = setInterval(() => setBannerIndex((i) => (i + 1) % total), 2000);

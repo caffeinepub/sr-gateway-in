@@ -2,7 +2,7 @@ import { HttpAgent } from "@icp-sdk/core/agent";
 import { useCallback, useEffect, useState } from "react";
 import { loadConfig } from "../config";
 import { StorageClient } from "../utils/StorageClient";
-import { useInternetIdentity } from "./useInternetIdentity";
+import { useLocalIdentity } from "./useLocalIdentity";
 
 const MOTOKO_SENTINEL = "!caf!";
 
@@ -15,7 +15,7 @@ interface BlobConfig {
 }
 
 export function useBlobStorage() {
-  const { identity } = useInternetIdentity();
+  const { identity } = useLocalIdentity();
   const [blobConfig, setBlobConfig] = useState<BlobConfig | null>(null);
 
   useEffect(() => {

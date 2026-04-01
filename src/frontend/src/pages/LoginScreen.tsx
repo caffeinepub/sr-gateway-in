@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Loader2, Lock, Mail, Phone, Shield } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 async function hashString(value: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -25,7 +24,6 @@ export default function LoginScreen({
   credentialError,
   onRegister,
 }: LoginScreenProps) {
-  const { login, isLoggingIn } = useInternetIdentity();
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -55,7 +53,6 @@ export default function LoginScreen({
       // Store mobile in localStorage for profile display
       localStorage.setItem("sr_user_mobile", mobileClean);
       onCredentialsReady?.(mobileHash, passwordHash);
-      await login();
     } catch {
       setFormError("Login mein problem aayi. Dobara try karein.");
     } finally {
@@ -63,7 +60,7 @@ export default function LoginScreen({
     }
   };
 
-  const isLoading = isLoggingIn || isProcessing;
+  const isLoading = isProcessing;
   const errorMsg = formError || credentialError;
 
   return (
@@ -211,7 +208,7 @@ export default function LoginScreen({
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isLoggingIn ? "Connecting..." : "Processing..."}
+                    {"Processing..."}
                   </>
                 ) : (
                   "Login"
@@ -274,6 +271,16 @@ export default function LoginScreen({
           </button>
         </motion.div>
 
+        {/* Disclaimer for App Store Review */}
+        <div className="w-full bg-blue-950/40 border border-blue-700/40 rounded-xl p-3 text-center">
+          <p className="text-blue-300 text-xs font-semibold">📋 Disclaimer</p>
+          <p className="text-blue-400/80 text-xs mt-0.5">
+            SR GATEWAY IN is a digital wallet management app for SR TECHNOLOGY
+            LTD™. This app simulates internal wallet transactions and does not
+            process real banking or financial transactions. All wallet balances
+            are internal credits only.
+          </p>
+        </div>
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

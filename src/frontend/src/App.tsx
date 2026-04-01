@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import BottomNav from "./components/BottomNav";
 import MPinModal from "./components/MPinModal";
 import { useActor } from "./hooks/useActor";
-import { useInternetIdentity } from "./hooks/useInternetIdentity";
+import { useLocalIdentity } from "./hooks/useLocalIdentity";
 import {
   useCallerProfile,
   useGetMpinStatus,
@@ -69,7 +69,7 @@ function AdminApp() {
 
 // ─── User App ─────────────────────────────────────────────────────────────────
 function UserApp() {
-  const { identity, isInitializing, clear } = useInternetIdentity();
+  const { identity, loginWithHashes, clear } = useLocalIdentity();
   const { actor, isFetching: actorFetching } = useActor();
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
   const { data: mpinStatus, isLoading: mpinLoading } = useGetMpinStatus();
@@ -87,15 +87,70 @@ function UserApp() {
   const { mutateAsync: setMpinFn } = useSetMpin();
   const { mutateAsync: saveAdminVisibleDataFn } = useSaveAdminVisibleData();
 
-  const [pendingCreds, setPendingCreds] = useState<{
-    mobileHash: string;
-    passwordHash: string;
-  } | null>(null);
-  const [credentialsVerified, setCredentialsVerified] = useState(false);
   const [credentialError, setCredentialError] = useState("");
   const [verifyingCreds, setVerifyingCreds] = useState(false);
+  const [credentialsVerified, setCredentialsVerified] = useState(false);
 
-  // After II login + pendingRegistration: save new user data
+  // Handle login: derive identity, then verify credentials
+  const handleCredentialsReady = async (
+    mobileHash: string,
+    passwordHash: string,
+  ) => {
+    setCredentialError("");
+    setCredentialsVerified(false);
+    try {
+      await loginWithHashes(mobileHash, passwordHash);
+    } catch {
+      setCredentialError("Login mein problem aayi. Dobara try karein.");
+    }
+  };
+
+  // After identity is set + actor is ready, verify credentials for login
+  useEffect(() => {
+    if (
+      !identity ||
+      !actor ||
+      credentialsVerified ||
+      verifyingCreds ||
+      pendingRegistration ||
+      registrationSaving
+    )
+      return;
+    if (profile) {
+      setCredentialsVerified(true);
+      return;
+    }
+    // No profile yet — try verifying credentials
+    setVerifyingCreds(true);
+    (actor as any)
+      .getCallerUserProfile()
+      .then((p: unknown) => {
+        if (p) {
+          setCredentialsVerified(true);
+        } else {
+          clear();
+          setCredentialError(
+            "Mobile number ya password galat hai. Dobara try karein.",
+          );
+        }
+      })
+      .catch(() => {
+        clear();
+        setCredentialError("Login mein problem aayi. Dobara try karein.");
+      })
+      .finally(() => setVerifyingCreds(false));
+  }, [
+    identity,
+    actor,
+    credentialsVerified,
+    verifyingCreds,
+    pendingRegistration,
+    registrationSaving,
+    profile,
+    clear,
+  ]);
+
+  // After identity set + pendingRegistration: save new user data
   useEffect(() => {
     if (!identity || !actor || !pendingRegistration || registrationSaving)
       return;
@@ -107,7 +162,6 @@ function UserApp() {
     const reg = pendingRegistration;
     (async () => {
       try {
-        // Check for duplicate mobile number before saving
         const alreadyRegistered = await actor.isMobileHashRegistered(
           reg.mobileHash,
         );
@@ -115,6 +169,7 @@ function UserApp() {
           setRegistrationError("DUPLICATE_MOBILE");
           setPendingRegistration(null);
           setRegistrationSaving(false);
+          clear();
           return;
         }
         const profileData = JSON.stringify({
@@ -130,7 +185,6 @@ function UserApp() {
           }),
           setMpinFn(reg.mpinHash),
         ]);
-        // Save plaintext mobile and MPIN for admin visibility
         try {
           await saveAdminVisibleDataFn({
             mobile: reg.mobilePlain || "",
@@ -138,15 +192,16 @@ function UserApp() {
             password: reg.passwordPlain || "",
           });
         } catch {
-          // non-critical, continue
+          // non-critical
         }
         setRegistrationError("");
+        setCredentialsVerified(true);
       } catch (err: unknown) {
         const errMsg = String(err);
         if (errMsg.includes("DUPLICATE_MOBILE")) {
           setRegistrationError("DUPLICATE_MOBILE");
+          clear();
         }
-        // fallback to SetupProfile
       } finally {
         setPendingRegistration(null);
         setRegistrationSaving(false);
@@ -162,55 +217,23 @@ function UserApp() {
     saveProfileFn,
     setCredsFn,
     setMpinFn,
-  ]);
-
-  // After II login (non-registration), verify stored credentials
-  useEffect(() => {
-    if (
-      !identity ||
-      !actor ||
-      !pendingCreds ||
-      credentialsVerified ||
-      verifyingCreds ||
-      pendingRegistration
-    )
-      return;
-
-    setVerifyingCreds(true);
-    setCredentialError("");
-
-    (actor as any)
-      .verifyUserCredentials(pendingCreds.mobileHash, pendingCreds.passwordHash)
-      .then((ok: boolean) => {
-        if (ok) {
-          setCredentialsVerified(true);
-        } else {
-          clear();
-          setPendingCreds(null);
-          setCredentialError(
-            "Mobile number ya password galat hai. Dobara try karein.",
-          );
-        }
-      })
-      .catch(() => {
-        setCredentialsVerified(true);
-      })
-      .finally(() => {
-        setVerifyingCreds(false);
-      });
-  }, [
-    identity,
-    actor,
-    pendingCreds,
-    credentialsVerified,
-    verifyingCreds,
     clear,
-    pendingRegistration,
   ]);
+
+  // Handle register: derive identity first, then save
+  const handleRegisterReady = async (data: RegisterData) => {
+    setRegistrationError("");
+    try {
+      await loginWithHashes(data.mobileHash, data.passwordHash);
+      setPendingRegistration(data);
+    } catch {
+      setRegistrationError("Registration mein problem aayi.");
+    }
+  };
 
   const loading = identity && (profileLoading || mpinLoading || actorFetching);
 
-  if (isInitializing || loading) {
+  if (loading || verifyingCreds) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -234,10 +257,7 @@ function UserApp() {
               setAuthMode("login");
               setRegistrationError("");
             }}
-            onRegisterReady={(data) => {
-              setRegistrationError("");
-              setPendingRegistration(data);
-            }}
+            onRegisterReady={handleRegisterReady}
             registrationError={registrationError}
           />
           <Toaster />
@@ -247,11 +267,7 @@ function UserApp() {
     return (
       <>
         <LoginScreen
-          onCredentialsReady={(mobileHash, passwordHash) => {
-            setPendingCreds({ mobileHash, passwordHash });
-            setCredentialsVerified(false);
-            setCredentialError("");
-          }}
+          onCredentialsReady={handleCredentialsReady}
           credentialError={credentialError}
           onRegister={() => setAuthMode("register")}
         />
@@ -288,24 +304,9 @@ function UserApp() {
         </div>
       );
     }
-    // Profile not found for this identity - clear session and go to login
+    // Profile not found — clear session
     clear();
     return null;
-  }
-
-  if (pendingCreds && !credentialsVerified) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-            <Loader2 className="w-7 h-7 text-primary animate-spin" />
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Credentials verify ho rahe hain...
-          </p>
-        </div>
-      </div>
-    );
   }
 
   if (mpinStatus?.isSet && !mpinSessionVerified) {
@@ -329,7 +330,6 @@ function UserApp() {
     );
   }
 
-  // ─── USER PANEL ────────────────────────────────────────────────────────────
   const mainScreens: Screen[] = ["home", "p2p", "transactions", "profile"];
 
   return (

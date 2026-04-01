@@ -6,7 +6,7 @@ import { Copy, LogOut, Mail, MessageCircle, User, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Screen } from "../App";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useLocalIdentity } from "../hooks/useLocalIdentity";
 import {
   useCallerProfile,
   useSetMpin,
@@ -28,7 +28,7 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ onNavigate }: ProfileScreenProps) {
-  const { clear } = useInternetIdentity();
+  const { clear } = useLocalIdentity();
   const { data: profile } = useCallerProfile();
 
   const updateName = useUpdateDisplayName();

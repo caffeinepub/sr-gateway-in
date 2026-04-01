@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Lock, Mail, Phone, Shield, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 async function hashString(value: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -38,7 +37,6 @@ export default function RegisterScreen({
   onRegisterReady,
   registrationError,
 }: RegisterScreenProps) {
-  const { login, isLoggingIn } = useInternetIdentity();
   const [step, setStep] = useState<1 | 2>(1);
 
   const [name, setName] = useState("");
@@ -148,7 +146,6 @@ export default function RegisterScreen({
         passwordHash,
         mpinHash,
       });
-      await login();
     } catch {
       setPinError("Registration mein problem aayi. Dobara try karein.");
     } finally {
@@ -156,7 +153,7 @@ export default function RegisterScreen({
     }
   };
 
-  const isLoading = isLoggingIn || isSubmitting;
+  const isLoading = isSubmitting;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 relative overflow-hidden">
